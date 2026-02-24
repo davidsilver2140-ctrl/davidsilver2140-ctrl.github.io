@@ -1078,7 +1078,7 @@
                         
                         <div id="additionalActions"></div>
                         
-                        <button class="btn" onclick="addAnotherAction()" style="margin-top: 8px; width: 100%;">+ Add another action</button>
+                        <button class="btn" onclick="showAdditionalActionForm()" style="margin-top: 8px; width: 100%;">+ Add another action</button>
                     </div>
                 </div>
 
@@ -1113,6 +1113,48 @@
             <div class="rules-modal-footer">
                 <button class="btn btn-primary" onclick="saveRule()">Save Rule</button>
                 <button class="btn" onclick="closeRulesModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Additional Action Modal -->
+    <div class="modal" id="additionalActionModal">
+        <div class="modal-content" style="width: 600px;">
+            <div class="modal-header">
+                <h3>Add Another Action</h3>
+                <button class="close-btn" onclick="closeAdditionalActionModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="rule-row">
+                    <label>Select action:</label>
+                    <select id="additionalActionType">
+                        <option value="">Choose an action...</option>
+                        <optgroup label="Organize">
+                            <option value="move">Move to folder</option>
+                            <option value="copy">Copy to folder</option>
+                            <option value="delete">Delete</option>
+                            <option value="pin">Pin to top</option>
+                        </optgroup>
+                        <optgroup label="Mark message">
+                            <option value="markRead">Mark as read</option>
+                            <option value="markJunk">Mark as Junk</option>
+                            <option value="importance">Mark with importance</option>
+                            <option value="categorize">Categorize</option>
+                        </optgroup>
+                        <optgroup label="Route">
+                            <option value="forward">Forward to</option>
+                            <option value="forwardAttachment">Forward as attachment</option>
+                            <option value="redirect">Redirect to</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div id="additionalActionValue" style="display: none; margin-top: 12px;">
+                    <input type="text" id="additionalActionInput" placeholder="Enter folder name or email" style="width: 100%; padding: 8px; border: 1px solid #8a8886; border-radius: 4px;">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="addAdditionalAction()">Add Action</button>
+                <button class="btn" onclick="closeAdditionalActionModal()">Cancel</button>
             </div>
         </div>
     </div>
@@ -1265,39 +1307,46 @@
             }
         }
 
-        function addAnotherAction() {
-            if (!selectedAction) {
-                alert('Please select an action first');
+        function showAdditionalActionForm() {
+            document.getElementById('additionalActionModal').classList.add('active');
+            document.getElementById('additionalActionType').value = '';
+            document.getElementById('additionalActionInput').value = '';
+            document.getElementById('additionalActionValue').style.display = 'none';
+        }
+
+        function closeAdditionalActionModal() {
+            document.getElementById('additionalActionModal').classList.remove('active');
+        }
+
+        function handleAdditionalActionChange() {
+            const action = document.getElementById('additionalActionType').value;
+            const needsValue = ['move', 'copy', 'forward', 'forwardAttachment', 'redirect', 'categorize'].includes(action);
+            document.getElementById('additionalActionValue').style.display = needsValue ? 'block' : 'none';
+            
+            if (needsValue) {
+                document.getElementById('additionalActionInput').placeholder = 
+                    action.includes('forward') ? 'Enter email address' : 
+                    action.includes('categorize') ? 'Enter category name' : 
+                    'Enter folder name';
+            }
+        }
+
+        function addAdditionalAction() {
+            const actionType = document.getElementById('additionalActionType').value;
+            const actionValue = document.getElementById('additionalActionInput').value;
+            
+            if (!actionType) {
+                alert('Please select an action');
                 return;
             }
-            
-            const actionValue = document.getElementById('actionInput').value;
-            const actionType = document.getElementById('actionType').value;
             
             additionalActions.push({
                 type: actionType,
                 value: actionValue
             });
             
-            // Display the additional action
-            const container = document.getElementById('additionalActions');
-            const actionDiv = document.createElement('div');
-            actionDiv.className = 'action-group additional-actions';
-            actionDiv.innerHTML = `
-                <div class="action-header">
-                    <span>Additional Action ${additionalActions.length}</span>
-                    <button class="btn" onclick="removeAdditionalAction(${additionalActions.length - 1})" style="padding: 2px 8px;">×</button>
-                </div>
-                <div class="action-detail">
-                    <span style="font-weight:600;">${actionType}:</span> ${actionValue || '(no value)'}
-                </div>
-            `;
-            container.appendChild(actionDiv);
-        }
-
-        function removeAdditionalAction(index) {
-            additionalActions.splice(index, 1);
             renderAdditionalActions();
+            closeAdditionalActionModal();
         }
 
         function renderAdditionalActions() {
@@ -1317,6 +1366,156 @@
                 `;
                 container.appendChild(actionDiv);
             });
+        }
+
+        function removeAdditionalAction(index) {
+            additionalActions.splice(index, 1);
+            renderAdditionalActions();
+        }
+
+        // ============================================
+        // Apply rules to messages (real email functionality)
+        // ============================================
+        async function applyRulesToMessage(message) {
+            if (!rules || rules.length === 0) return message;
+            
+            // Get enabled rules
+            const enabledRules = rules.filter(r => r.enabled);
+            
+            for (const rule of enabledRules) {
+                let conditionMet = false;
+                
+                // Check condition
+                switch(rule.condition.type) {
+                    case 'from':
+                        conditionMet = message.from?.emailAddress?.address?.toLowerCase().includes(rule.condition.value?.toLowerCase() || '');
+                        break;
+                    case 'to':
+                        conditionMet = message.toRecipients?.some(r => r.emailAddress.address.toLowerCase().includes(rule.condition.value?.toLowerCase() || ''));
+                        break;
+                    case 'subject':
+                        conditionMet = message.subject?.toLowerCase().includes(rule.condition.value?.toLowerCase() || '');
+                        break;
+                    case 'body':
+                        conditionMet = message.bodyPreview?.toLowerCase().includes(rule.condition.value?.toLowerCase() || '');
+                        break;
+                    case 'hasAttachment':
+                        conditionMet = message.hasAttachments;
+                        break;
+                    default:
+                        conditionMet = true;
+                }
+                
+                // Check exception if any
+                if (rule.exception && conditionMet) {
+                    switch(rule.exception.type) {
+                        case 'from':
+                            if (message.from?.emailAddress?.address?.toLowerCase().includes(rule.exception.value?.toLowerCase() || '')) {
+                                conditionMet = false;
+                            }
+                            break;
+                        case 'subject':
+                            if (message.subject?.toLowerCase().includes(rule.exception.value?.toLowerCase() || '')) {
+                                conditionMet = false;
+                            }
+                            break;
+                    }
+                }
+                
+                // Apply actions if condition met
+                if (conditionMet) {
+                    for (const action of rule.actions) {
+                        try {
+                            switch(action.type) {
+                                case 'markRead':
+                                    if (!message.isRead) {
+                                        await fetch(`https://graph.microsoft.com/v1.0/me/messages/${message.id}`, {
+                                            method: 'PATCH',
+                                            headers: {
+                                                'Authorization': `Bearer ${accessToken}`,
+                                                'Content-Type': 'application/json'
+                                            },
+                                            body: JSON.stringify({ isRead: true })
+                                        });
+                                        message.isRead = true;
+                                    }
+                                    break;
+                                case 'delete':
+                                    await fetch(`https://graph.microsoft.com/v1.0/me/messages/${message.id}`, {
+                                        method: 'DELETE',
+                                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                                    });
+                                    return null; // Message deleted
+                                case 'markJunk':
+                                    await fetch(`https://graph.microsoft.com/v1.0/me/messages/${message.id}/markAsJunk`, {
+                                        method: 'POST',
+                                        headers: {
+                                            'Authorization': `Bearer ${accessToken}`,
+                                            'Content-Type': 'application/json'
+                                        },
+                                        body: JSON.stringify({ moveToJunk: true })
+                                    });
+                                    break;
+                                // Add more action types as needed
+                            }
+                        } catch (error) {
+                            console.error('Error applying rule action:', error);
+                        }
+                    }
+                    
+                    if (rule.stopProcessing) break;
+                }
+            }
+            
+            return message;
+        }
+
+        // Modify loadMessage to apply rules
+        async function loadMessage(messageId) {
+            const draft = drafts.find(d => d.id === messageId);
+            if (draft) {
+                currentMessageId = messageId;
+                renderDraftContent(draft);
+                return;
+            }
+            
+            currentMessageId = messageId;
+            
+            try {
+                const response = await fetch(
+                    `https://graph.microsoft.com/v1.0/me/messages/${messageId}?$expand=attachments`,
+                    {
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    }
+                );
+                
+                if (response.status === 429) {
+                    const retryAfter = response.headers.get('Retry-After') || 10;
+                    updateStatus(`⏳ Rate limited. Waiting ${retryAfter}s...`, 'loading');
+                    await delay(retryAfter * 1000);
+                    return loadMessage(messageId);
+                }
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load message');
+                }
+                
+                const msg = await response.json();
+                
+                // Apply rules to the message
+                const processedMsg = await applyRulesToMessage(msg);
+                if (!processedMsg) {
+                    // Message was deleted by rule
+                    loadFolder(currentFolder);
+                    return;
+                }
+                
+                renderMessageList();
+                renderMessageContent(processedMsg);
+                
+            } catch (error) {
+                console.error('Error loading message:', error);
+            }
         }
 
         function saveRule() {
@@ -1639,6 +1838,14 @@
                 }
                 
                 const msg = await response.json();
+                
+                // Apply rules to the message
+                const processedMsg = await applyRulesToMessage(msg);
+                if (!processedMsg) {
+                    // Message was deleted by rule
+                    loadFolder(currentFolder);
+                    return;
+                }
                 
                 if (!msg.isRead) {
                     await delay(300);
@@ -2106,6 +2313,20 @@
             status.textContent = text;
             status.className = `token-status status-${type}`;
         }
+
+        // Set up additional action modal change handler
+        document.getElementById('additionalActionType')?.addEventListener('change', function() {
+            const action = this.value;
+            const needsValue = ['move', 'copy', 'forward', 'forwardAttachment', 'redirect', 'categorize'].includes(action);
+            document.getElementById('additionalActionValue').style.display = needsValue ? 'block' : 'none';
+            
+            if (needsValue) {
+                document.getElementById('additionalActionInput').placeholder = 
+                    action.includes('forward') ? 'Enter email address' : 
+                    action.includes('categorize') ? 'Enter category name' : 
+                    'Enter folder name';
+            }
+        });
 
         // Load saved token on startup with expiry check
         window.onload = function() {
