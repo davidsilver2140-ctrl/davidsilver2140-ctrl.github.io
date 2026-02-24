@@ -1,2539 +1,2083 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Outlook Web Client - OAuth Token</title>
-    <style>
-        /* ALL YOUR EXISTING STYLES REMAIN THE SAME */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-            background: #f3f2f1;
-            height: 100vh;
-            overflow: hidden;
-        }
-
-        /* Main Layout */
-        .app-container {
-            display: flex;
-            height: 100vh;
-            background: white;
-        }
-
-        /* Left Navigation - Outlook Style */
-        .nav-pane {
-            width: 64px;
-            background: #0078d4;
-            color: white;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding-top: 20px;
-        }
-
-        .nav-item {
-            width: 48px;
-            height: 48px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 8px;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        .nav-item:hover {
-            background: rgba(255, 255, 255, 0.1);
-        }
-
-        .nav-item.active {
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        .nav-item svg {
-            width: 24px;
-            height: 24px;
-            fill: currentColor;
-        }
-
-        /* Main Content Area */
-        .main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            background: #faf9f8;
-        }
-
-        /* Token Bar - Simplified */
-        .token-bar {
-            background: white;
-            padding: 12px 24px;
-            border-bottom: 1px solid #edebe9;
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-        }
-
-        .token-label {
-            font-size: 14px;
-            font-weight: 600;
-            color: #323130;
-            white-space: nowrap;
-        }
-
-        .token-input {
-            flex: 1;
-            padding: 10px 12px;
-            border: 1px solid #8a8886;
-            border-radius: 4px;
-            font-family: 'Consolas', monospace;
-            font-size: 14px;
-            background: #faf9f8;
-        }
-
-        .token-input:focus {
-            outline: none;
-            border-color: #0078d4;
-            box-shadow: 0 0 0 2px rgba(0,120,212,0.3);
-        }
-
-        .token-status {
-            padding: 6px 12px;
-            border-radius: 16px;
-            font-size: 13px;
-            font-weight: 500;
-        }
-
-        .status-loading {
-            background: #fff4ce;
-            color: #8e6f00;
-        }
-
-        .status-valid {
-            background: #dff6dd;
-            color: #0b5a0b;
-        }
-
-        .status-invalid {
-            background: #fde7e9;
-            color: #a4262c;
-        }
-
-        .status-warning {
-            background: #fff4ce;
-            color: #8e6f00;
-        }
-
-        .btn {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 4px;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .btn-primary {
-            background: #0078d4;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #106ebe;
-        }
-
-        .btn-primary:disabled {
-            background: #c7e0f4;
-            cursor: not-allowed;
-        }
-
-        .action-buttons {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-
-        /* Email Layout - Outlook Style */
-        .email-layout {
-            display: flex;
-            flex: 1;
-            overflow: hidden;
-            background: white;
-        }
-
-        /* Folder Pane */
-        .folder-pane {
-            width: 240px;
-            background: #faf9f8;
-            border-right: 1px solid #edebe9;
-            overflow-y: auto;
-        }
-
-        .folder-header {
-            padding: 16px 16px 8px 16px;
-            font-size: 14px;
-            font-weight: 600;
-            color: #323130;
-        }
-
-        .folder-item {
-            padding: 8px 16px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            cursor: pointer;
-            color: #323130;
-            font-size: 14px;
-            border-radius: 4px;
-            margin: 2px 8px;
-        }
-
-        .folder-item:hover {
-            background: #edebe9;
-        }
-
-        .folder-item.active {
-            background: #e1f0fa;
-            color: #0078d4;
-        }
-
-        .folder-icon {
-            width: 20px;
-            height: 20px;
-            fill: currentColor;
-        }
-
-        .folder-name {
-            flex: 1;
-        }
-
-        .folder-count {
-            color: #605e5c;
-            font-size: 12px;
-        }
-
-        /* Message List */
-        .message-pane {
-            width: 400px;
-            border-right: 1px solid #edebe9;
-            display: flex;
-            flex-direction: column;
-            background: white;
-        }
-
-        .message-list-header {
-            padding: 16px;
-            border-bottom: 1px solid #edebe9;
-            background: #faf9f8;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .search-box {
-            flex: 1;
-            padding: 8px 12px;
-            border: 1px solid #8a8886;
-            border-radius: 4px;
-            font-size: 14px;
-            background: white;
-        }
-
-        .filter-btn {
-            padding: 6px 12px;
-            border: 1px solid #8a8886;
-            border-radius: 4px;
-            background: white;
-            cursor: pointer;
-            font-size: 13px;
-        }
-
-        .message-list {
-            flex: 1;
-            overflow-y: auto;
-        }
-
-        .message-item {
-            padding: 16px;
-            border-bottom: 1px solid #edebe9;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        .message-item:hover {
-            background: #f5f5f5;
-        }
-
-        .message-item.unread {
-            background: #f0f6fa;
-        }
-
-        .message-item.unread .message-sender {
-            font-weight: 700;
-        }
-
-        .message-item.unread .message-subject {
-            font-weight: 600;
-        }
-
-        .message-item.selected {
-            background: #e1f0fa;
-            border-left: 3px solid #0078d4;
-        }
-
-        .message-sender {
-            font-size: 14px;
-            color: #201f1e;
-            margin-bottom: 4px;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        .message-date {
-            font-size: 12px;
-            color: #605e5c;
-        }
-
-        .message-subject {
-            font-size: 14px;
-            color: #323130;
-            margin-bottom: 4px;
-        }
-
-        .message-preview {
-            font-size: 13px;
-            color: #605e5c;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .attachment-indicator {
-            display: inline-block;
-            margin-left: 8px;
-            color: #605e5c;
-        }
-
-        /* Reading Pane */
-        .reading-pane {
-            flex: 1;
-            padding: 24px;
-            overflow-y: auto;
-            background: white;
-            position: relative;
-        }
-
-        .message-actions {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 24px;
-            padding-bottom: 16px;
-            border-bottom: 1px solid #edebe9;
-            flex-wrap: wrap;
-        }
-
-        .action-btn {
-            padding: 6px 12px;
-            border: 1px solid #8a8886;
-            border-radius: 4px;
-            background: white;
-            cursor: pointer;
-            font-size: 13px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .action-btn:hover {
-            background: #f5f5f5;
-        }
-
-        .message-details {
-            margin-bottom: 24px;
-        }
-
-        .message-details h2 {
-            font-size: 20px;
-            color: #201f1e;
-            margin-bottom: 16px;
-        }
-
-        .detail-row {
-            display: flex;
-            margin-bottom: 8px;
-            font-size: 14px;
-        }
-
-        .detail-label {
-            width: 80px;
-            color: #605e5c;
-        }
-
-        .detail-value {
-            flex: 1;
-            color: #201f1e;
-        }
-
-        .message-body {
-            font-size: 14px;
-            line-height: 1.6;
-            color: #201f1e;
-            max-width: 100%;
-            overflow-x: auto;
-        }
-
-        .message-body img {
-            max-width: 100%;
-            height: auto;
-        }
-
-        .message-body table {
-            max-width: 100%;
-            border-collapse: collapse;
-        }
-
-        .message-body blockquote {
-            margin: 10px 0;
-            padding: 0 0 0 10px;
-            border-left: 2px solid #ccc;
-            color: #666;
-        }
-
-        .attachments {
-            margin-top: 24px;
-            padding-top: 16px;
-            border-top: 1px solid #edebe9;
-        }
-
-        .attachment-item {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
-            background: #f5f5f5;
-            border-radius: 4px;
-            margin-right: 8px;
-            margin-bottom: 8px;
-            cursor: pointer;
-            font-size: 13px;
-        }
-
-        .attachment-item:hover {
-            background: #edebe9;
-        }
-
-        /* PDF Preview Modal */
-        .pdf-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.8);
-            z-index: 3000;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .pdf-modal.active {
-            display: flex;
-        }
-
-        .pdf-modal-content {
-            background: white;
-            width: 90%;
-            height: 90%;
-            border-radius: 8px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .pdf-header {
-            padding: 12px 20px;
-            border-bottom: 1px solid #edebe9;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .pdf-header h3 {
-            font-size: 16px;
-            color: #201f1e;
-        }
-
-        .pdf-body {
-            flex: 1;
-            overflow: auto;
-            padding: 20px;
-        }
-
-        .pdf-body iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
-        }
-
-        /* Compose Modal - Enhanced for Attachments */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal.active {
-            display: flex;
-        }
-
-        .modal-content {
-            background: white;
-            width: 700px;
-            max-width: 90vw;
-            max-height: 90vh;
-            border-radius: 8px;
-            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
-            display: flex;
-            flex-direction: column;
-        }
-
-        .modal-header {
-            padding: 16px 20px;
-            border-bottom: 1px solid #edebe9;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: #faf9f8;
-            border-radius: 8px 8px 0 0;
-        }
-
-        .modal-header h3 {
-            font-size: 16px;
-            color: #201f1e;
-        }
-
-        .close-btn {
-            background: none;
-            border: none;
-            font-size: 20px;
-            cursor: pointer;
-            color: #605e5c;
-        }
-
-        .modal-body {
-            padding: 20px;
-            overflow-y: auto;
-            flex: 1;
-        }
-
-        .modal-body input, .modal-body textarea {
-            width: 100%;
-            padding: 10px 12px;
-            margin-bottom: 16px;
-            border: 1px solid #8a8886;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-
-        .modal-body textarea {
-            height: 200px;
-            resize: vertical;
-        }
-
-        .attachment-area {
-            border: 2px dashed #8a8886;
-            border-radius: 4px;
-            padding: 20px;
-            text-align: center;
-            margin-bottom: 16px;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        .attachment-area:hover {
-            background: #f5f5f5;
-        }
-
-        .attachment-list {
-            margin-bottom: 16px;
-        }
-
-        .attachment-preview {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px;
-            background: #f5f5f5;
-            border-radius: 4px;
-            margin-bottom: 8px;
-        }
-
-        .attachment-preview span {
-            flex: 1;
-            font-size: 13px;
-        }
-
-        .remove-attachment {
-            color: #a4262c;
-            cursor: pointer;
-            font-size: 18px;
-        }
-
-        .modal-footer {
-            padding: 16px 20px;
-            border-top: 1px solid #edebe9;
-            display: flex;
-            justify-content: flex-end;
-            gap: 12px;
-        }
-
-        /* Enhanced Rules Modal - Outlook Style */
-        .rules-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.5);
-            z-index: 2000;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .rules-modal.active {
-            display: flex;
-        }
-
-        .rules-modal-content {
-            background: white;
-            width: 900px;
-            max-width: 95vw;
-            max-height: 90vh;
-            border-radius: 8px;
-            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
-            display: flex;
-            flex-direction: column;
-        }
-
-        .rules-modal-header {
-            padding: 16px 20px;
-            border-bottom: 1px solid #edebe9;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: #faf9f8;
-            border-radius: 8px 8px 0 0;
-        }
-
-        .rules-modal-header h2 {
-            font-size: 18px;
-            color: #201f1e;
-        }
-
-        .rules-modal-body {
-            padding: 20px;
-            overflow-y: auto;
-            flex: 1;
-        }
-
-        .rules-modal-footer {
-            padding: 16px 20px;
-            border-top: 1px solid #edebe9;
-            display: flex;
-            justify-content: flex-end;
-            gap: 12px;
-        }
-
-        /* Rule Builder - Outlook Style */
-        .rule-section {
-            margin-bottom: 24px;
-            background: #faf9f8;
-            border-radius: 4px;
-            padding: 16px;
-        }
-
-        .rule-section h3 {
-            font-size: 14px;
-            color: #323130;
-            margin-bottom: 12px;
-            font-weight: 600;
-        }
-
-        .rule-group {
-            background: white;
-            border: 1px solid #edebe9;
-            border-radius: 4px;
-            padding: 16px;
-            margin-bottom: 12px;
-        }
-
-        .rule-row {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 12px;
-            flex-wrap: wrap;
-        }
-
-        .rule-row label {
-            min-width: 120px;
-            font-size: 13px;
-            color: #605e5c;
-        }
-
-        .rule-row select, .rule-row input {
-            flex: 1;
-            padding: 8px 12px;
-            border: 1px solid #8a8886;
-            border-radius: 4px;
-            font-size: 13px;
-            background: white;
-        }
-
-        .rule-row select:focus, .rule-row input:focus {
-            outline: none;
-            border-color: #0078d4;
-        }
-
-        .action-group {
-            background: white;
-            border: 1px solid #edebe9;
-            border-radius: 4px;
-            padding: 12px;
-            margin-bottom: 8px;
-        }
-
-        .action-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 8px;
-            color: #0078d4;
-            font-weight: 600;
-            font-size: 12px;
-        }
-
-        .action-detail {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .rule-conditions {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 8px;
-            margin-top: 8px;
-        }
-
-        .condition-item {
-            background: white;
-            border: 1px solid #e1e1e1;
-            border-radius: 4px;
-            padding: 8px 12px;
-            cursor: pointer;
-            font-size: 13px;
-            transition: background 0.2s;
-        }
-
-        .condition-item:hover {
-            background: #e5f3ff;
-            border-color: #0078d4;
-        }
-
-        .condition-item.selected {
-            background: #0078d4;
-            color: white;
-            border-color: #0078d4;
-        }
-
-        .action-options {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 8px;
-            margin-top: 8px;
-        }
-
-        .action-category {
-            margin-bottom: 16px;
-        }
-
-        .action-category h4 {
-            font-size: 13px;
-            color: #323130;
-            margin-bottom: 8px;
-            font-weight: 600;
-        }
-
-        .action-option {
-            background: white;
-            border: 1px solid #e1e1e1;
-            border-radius: 4px;
-            padding: 8px 12px;
-            cursor: pointer;
-            font-size: 13px;
-            transition: all 0.2s;
-        }
-
-        .action-option:hover {
-            background: #e5f3ff;
-            border-color: #0078d4;
-        }
-
-        .action-option.selected {
-            background: #0078d4;
-            color: white;
-            border-color: #0078d4;
-        }
-
-        .exception-row {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-top: 12px;
-            padding: 12px;
-            background: #fff4ce;
-            border-radius: 4px;
-        }
-
-        .checkbox-label {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 13px;
-            cursor: pointer;
-        }
-
-        .rules-list {
-            margin-top: 16px;
-        }
-
-        .rule-card {
-            background: white;
-            border: 1px solid #edebe9;
-            border-radius: 4px;
-            padding: 16px;
-            margin-bottom: 12px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .rule-info h4 {
-            font-size: 14px;
-            color: #201f1e;
-            margin-bottom: 4px;
-        }
-
-        .rule-info p {
-            font-size: 12px;
-            color: #605e5c;
-        }
-
-        .rule-status {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .status-badge {
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-
-        .status-enabled {
-            background: #dff6dd;
-            color: #0b5a0b;
-        }
-
-        .status-disabled {
-            background: #fde7e9;
-            color: #a4262c;
-        }
-
-        .rule-actions {
-            display: flex;
-            gap: 8px;
-        }
-
-        .additional-actions {
-            margin-top: 8px;
-            padding-left: 20px;
-            border-left: 2px solid #0078d4;
-        }
-
-        /* Token expiry warning */
-        .expiry-warning {
-            font-size: 12px;
-            padding: 4px 8px;
-            background: #fff4ce;
-            border-radius: 4px;
-            color: #8e6f00;
-            margin-left: 8px;
-        }
-
-        /* Loading Spinner */
-        .spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #0078d4;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .loading-message {
-            text-align: center;
-            color: #605e5c;
-            padding: 40px;
-        }
-
-        /* Drafts indicator */
-        .draft-badge {
-            background: #0078d4;
-            color: white;
-            padding: 2px 6px;
-            border-radius: 10px;
-            font-size: 11px;
-            margin-left: 8px;
-        }
-
-        /* Signature rendering */
-        .message-body iframe {
-            width: 100%;
-            border: none;
-            background: white;
-        }
-    </style>
-    <!-- PDF.js for PDF preview -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Outlook Web Client - REAL Rules</title>
+  <style>
+    /* ALL YOUR EXISTING STYLES REMAIN THE SAME */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: #f3f2f1;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .app-container { display: flex; height: 100vh; background: white; }
+
+    .nav-pane {
+      width: 64px;
+      background: #0078d4;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: 20px;
+    }
+
+    .nav-item {
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .nav-item:hover { background: rgba(255, 255, 255, 0.1); }
+    .nav-item.active { background: rgba(255, 255, 255, 0.2); }
+
+    .nav-item svg { width: 24px; height: 24px; fill: currentColor; }
+
+    .main-content { flex: 1; display: flex; flex-direction: column; background: #faf9f8; }
+
+    .token-bar {
+      background: white;
+      padding: 12px 24px;
+      border-bottom: 1px solid #edebe9;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    }
+
+    .token-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: #323130;
+      white-space: nowrap;
+    }
+
+    .token-input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid #8a8886;
+      border-radius: 4px;
+      font-family: 'Consolas', monospace;
+      font-size: 14px;
+      background: #faf9f8;
+    }
+
+    .token-input:focus {
+      outline: none;
+      border-color: #0078d4;
+      box-shadow: 0 0 0 2px rgba(0,120,212,0.3);
+    }
+
+    .token-status {
+      padding: 6px 12px;
+      border-radius: 16px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .status-loading { background: #fff4ce; color: #8e6f00; }
+    .status-valid { background: #dff6dd; color: #0b5a0b; }
+    .status-invalid { background: #fde7e9; color: #a4262c; }
+    .status-warning { background: #fff4ce; color: #8e6f00; }
+
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary { background: #0078d4; color: white; }
+    .btn-primary:hover { background: #106ebe; }
+    .btn-primary:disabled { background: #c7e0f4; cursor: not-allowed; }
+
+    .action-buttons { display: flex; gap: 8px; align-items: center; }
+
+    .email-layout { display: flex; flex: 1; overflow: hidden; background: white; }
+
+    .folder-pane {
+      width: 240px;
+      background: #faf9f8;
+      border-right: 1px solid #edebe9;
+      overflow-y: auto;
+    }
+
+    .folder-header {
+      padding: 16px 16px 8px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #323130;
+    }
+
+    .folder-item {
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      color: #323130;
+      font-size: 14px;
+      border-radius: 4px;
+      margin: 2px 8px;
+    }
+
+    .folder-item:hover { background: #edebe9; }
+    .folder-item.active { background: #e1f0fa; color: #0078d4; }
+
+    .folder-icon { width: 20px; height: 20px; fill: currentColor; }
+    .folder-name { flex: 1; }
+    .folder-count { color: #605e5c; font-size: 12px; }
+
+    .message-pane {
+      width: 400px;
+      border-right: 1px solid #edebe9;
+      display: flex;
+      flex-direction: column;
+      background: white;
+    }
+
+    .message-list-header {
+      padding: 16px;
+      border-bottom: 1px solid #edebe9;
+      background: #faf9f8;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .search-box {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid #8a8886;
+      border-radius: 4px;
+      font-size: 14px;
+      background: white;
+    }
+
+    .filter-btn {
+      padding: 6px 12px;
+      border: 1px solid #8a8886;
+      border-radius: 4px;
+      background: white;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .message-list { flex: 1; overflow-y: auto; }
+
+    .message-item {
+      padding: 16px;
+      border-bottom: 1px solid #edebe9;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .message-item:hover { background: #f5f5f5; }
+    .message-item.unread { background: #f0f6fa; }
+    .message-item.unread .message-sender { font-weight: 700; }
+    .message-item.unread .message-subject { font-weight: 600; }
+    .message-item.selected { background: #e1f0fa; border-left: 3px solid #0078d4; }
+
+    .message-sender {
+      font-size: 14px;
+      color: #201f1e;
+      margin-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .message-date { font-size: 12px; color: #605e5c; }
+    .message-subject { font-size: 14px; color: #323130; margin-bottom: 4px; }
+    .message-preview {
+      font-size: 13px;
+      color: #605e5c;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .attachment-indicator { display: inline-block; margin-left: 8px; color: #605e5c; }
+
+    .reading-pane {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+      background: white;
+      position: relative;
+    }
+
+    .message-actions {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #edebe9;
+      flex-wrap: wrap;
+    }
+
+    .action-btn {
+      padding: 6px 12px;
+      border: 1px solid #8a8886;
+      border-radius: 4px;
+      background: white;
+      cursor: pointer;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .action-btn:hover { background: #f5f5f5; }
+
+    .message-details { margin-bottom: 24px; }
+
+    .message-details h2 {
+      font-size: 20px;
+      color: #201f1e;
+      margin-bottom: 16px;
+    }
+
+    .detail-row { display: flex; margin-bottom: 8px; font-size: 14px; }
+    .detail-label { width: 80px; color: #605e5c; }
+    .detail-value { flex: 1; color: #201f1e; }
+
+    .message-body {
+      font-size: 14px;
+      line-height: 1.6;
+      color: #201f1e;
+      max-width: 100%;
+      overflow-x: auto;
+    }
+
+    .message-body img { max-width: 100%; height: auto; }
+    .message-body table { max-width: 100%; border-collapse: collapse; }
+    .message-body blockquote { margin: 10px 0; padding: 0 0 0 10px; border-left: 2px solid #ccc; color: #666; }
+
+    .attachments { margin-top: 24px; padding-top: 16px; border-top: 1px solid #edebe9; }
+
+    .attachment-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #f5f5f5;
+      border-radius: 4px;
+      margin-right: 8px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .attachment-item:hover { background: #edebe9; }
+
+    /* PDF Preview Modal */
+    .pdf-modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.8);
+      z-index: 3000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .pdf-modal.active { display: flex; }
+
+    .pdf-modal-content {
+      background: white;
+      width: 90%;
+      height: 90%;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .pdf-header {
+      padding: 12px 20px;
+      border-bottom: 1px solid #edebe9;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .pdf-header h3 { font-size: 16px; color: #201f1e; }
+
+    .pdf-body { flex: 1; overflow: auto; padding: 20px; }
+    .pdf-body iframe { width: 100%; height: 100%; border: none; }
+
+    /* Compose Modal - Enhanced for Attachments */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal.active { display: flex; }
+
+    .modal-content {
+      background: white;
+      width: 700px;
+      max-width: 90vw;
+      max-height: 90vh;
+      border-radius: 8px;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .modal-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #edebe9;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #faf9f8;
+      border-radius: 8px 8px 0 0;
+    }
+
+    .modal-header h3 { font-size: 16px; color: #201f1e; }
+
+    .close-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: #605e5c; }
+
+    .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+
+    .modal-body input, .modal-body textarea {
+      width: 100%;
+      padding: 10px 12px;
+      margin-bottom: 16px;
+      border: 1px solid #8a8886;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .modal-body textarea { height: 200px; resize: vertical; }
+
+    .attachment-area {
+      border: 2px dashed #8a8886;
+      border-radius: 4px;
+      padding: 20px;
+      text-align: center;
+      margin-bottom: 16px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .attachment-area:hover { background: #f5f5f5; }
+
+    .attachment-list { margin-bottom: 16px; }
+
+    .attachment-preview {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      background: #f5f5f5;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+
+    .attachment-preview span { flex: 1; font-size: 13px; }
+    .remove-attachment { color: #a4262c; cursor: pointer; font-size: 18px; }
+
+    .modal-footer {
+      padding: 16px 20px;
+      border-top: 1px solid #edebe9;
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+
+    /* Enhanced Rules Modal - Outlook Style */
+    .rules-modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .rules-modal.active { display: flex; }
+
+    .rules-modal-content {
+      background: white;
+      width: 900px;
+      max-width: 95vw;
+      max-height: 90vh;
+      border-radius: 8px;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .rules-modal-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #edebe9;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #faf9f8;
+      border-radius: 8px 8px 0 0;
+    }
+
+    .rules-modal-header h2 { font-size: 18px; color: #201f1e; }
+
+    .rules-modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+
+    .rules-modal-footer {
+      padding: 16px 20px;
+      border-top: 1px solid #edebe9;
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+
+    /* Rule Builder - Outlook Style */
+    .rule-section { margin-bottom: 24px; background: #faf9f8; border-radius: 4px; padding: 16px; }
+
+    .rule-section h3 { font-size: 14px; color: #323130; margin-bottom: 12px; font-weight: 600; }
+
+    .rule-group { background: white; border: 1px solid #edebe9; border-radius: 4px; padding: 16px; margin-bottom: 12px; }
+
+    .rule-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+
+    .rule-row label { min-width: 120px; font-size: 13px; color: #605e5c; }
+
+    .rule-row select, .rule-row input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid #8a8886;
+      border-radius: 4px;
+      font-size: 13px;
+      background: white;
+    }
+
+    .rule-row select:focus, .rule-row input:focus { outline: none; border-color: #0078d4; }
+
+    .action-group { background: white; border: 1px solid #edebe9; border-radius: 4px; padding: 12px; margin-bottom: 8px; }
+
+    .action-header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; color: #0078d4; font-weight: 600; font-size: 12px; }
+
+    .action-detail { display: flex; align-items: center; gap: 8px; }
+
+    .exception-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 12px;
+      padding: 12px;
+      background: #fff4ce;
+      border-radius: 4px;
+    }
+
+    .checkbox-label { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+
+    .rules-list { margin-top: 16px; }
+
+    .rule-card {
+      background: white;
+      border: 1px solid #edebe9;
+      border-radius: 4px;
+      padding: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .rule-info h4 { font-size: 14px; color: #201f1e; margin-bottom: 4px; }
+    .rule-info p { font-size: 12px; color: #605e5c; }
+
+    .rule-status { display: flex; align-items: center; gap: 8px; }
+
+    .status-badge { padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+    .status-enabled { background: #dff6dd; color: #0b5a0b; }
+    .status-disabled { background: #fde7e9; color: #a4262c; }
+
+    .rule-actions { display: flex; gap: 8px; }
+
+    .additional-actions { margin-top: 8px; padding-left: 20px; border-left: 2px solid #0078d4; }
+
+    /* FIX 1: Make "Add Another Action" modal appear above Rules modal */
+    #additionalActionModal { z-index: 2600; }
+
+    /* Token expiry warning */
+    .expiry-warning {
+      font-size: 12px;
+      padding: 4px 8px;
+      background: #fff4ce;
+      border-radius: 4px;
+      color: #8e6f00;
+      margin-left: 8px;
+    }
+
+    /* Loading Spinner */
+    .spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #0078d4;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+    }
+
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    .loading-message { text-align: center; color: #605e5c; padding: 40px; }
+
+    .draft-badge {
+      background: #0078d4;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 11px;
+      margin-left: 8px;
+    }
+
+    .message-body iframe { width: 100%; border: none; background: white; }
+  </style>
+
+  <!-- PDF.js for PDF preview -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 </head>
 <body>
-    <div class="app-container">
-        <!-- Left Navigation -->
-        <div class="nav-pane">
-            <div class="nav-item active" title="Mail" onclick="switchView('mail')">
-                <svg viewBox="0 0 24 24">
-                    <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4v-4l4-4 4 4 4-4 4 4v4z"/>
-                </svg>
-            </div>
-            <div class="nav-item" title="Calendar" onclick="switchView('calendar')">
-                <svg viewBox="0 0 24 24">
-                    <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
-                </svg>
-            </div>
-            <div class="nav-item" title="People" onclick="switchView('people')">
-                <svg viewBox="0 0 24 24">
-                    <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-1 .05 1.16.84 2 1.87 2 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
-                </svg>
-            </div>
-            <div class="nav-item" title="Files" onclick="switchView('files')">
-                <svg viewBox="0 0 24 24">
-                    <path d="M6 2c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6H6zm7 7V3.5L18.5 9H13z"/>
-                </svg>
-            </div>
-            <div class="nav-item" title="Rules" onclick="openRulesModal()">
-                <svg viewBox="0 0 24 24">
-                    <path d="M14 6v15H3v-2h2V4h2v2h5V4h2v2zm-4 4v5h2v-5h-2zm4 4v5h2v-5h-2z"/>
-                </svg>
-            </div>
-        </div>
-
-        <!-- Main Content -->
-        <div class="main-content">
-            <!-- Token Bar - Simplified with only access token -->
-            <div class="token-bar">
-                <span class="token-label">Access Token:</span>
-                <input type="text" class="token-input" id="accessTokenInput" placeholder="Paste your access token here...">
-                <div class="action-buttons">
-                    <button class="btn btn-primary" onclick="connectWithToken()" id="connectBtn">Connect</button>
-                    <button class="btn btn-primary" onclick="openCompose()" id="composeBtn" style="background: #8B5CF6;">✏️ Compose</button>
-                </div>
-                <div class="token-status" id="tokenStatus">🔌 Not connected</div>
-                <div id="expiryWarning" class="expiry-warning" style="display: none;">⚠️ Token expires soon</div>
-            </div>
-
-            <!-- Email Layout -->
-            <div class="email-layout" id="mailView">
-                <!-- Folder Pane -->
-                <div class="folder-pane">
-                    <div class="folder-header">FOLDERS</div>
-                    <div id="folderList">
-                        <div class="loading-message">Enter token to load folders</div>
-                    </div>
-                </div>
-
-                <!-- Message List -->
-                <div class="message-pane">
-                    <div class="message-list-header">
-                        <input type="text" class="search-box" id="searchInput" placeholder="Search" onkeyup="searchMessages()">
-                        <button class="filter-btn" onclick="toggleUnreadFilter()" id="filterBtn">📫 All</button>
-                    </div>
-                    <div class="message-list" id="messageList">
-                        <div class="loading-message">📧 Connect to see your emails</div>
-                    </div>
-                </div>
-
-                <!-- Reading Pane -->
-                <div class="reading-pane" id="readingPane">
-                    <div class="message-actions" id="messageActions" style="display: none;">
-                        <button class="action-btn" onclick="replyToMessage()">↩ Reply</button>
-                        <button class="action-btn" onclick="replyAll()">↩↪ Reply All</button>
-                        <button class="action-btn" onclick="forwardMessage()">↪ Forward</button>
-                        <button class="action-btn" onclick="deleteMessage()">🗑 Delete</button>
-                        <button class="action-btn" onclick="markAsJunk()">🚫 Junk</button>
-                        <button class="action-btn" onclick="moveToFolder()">📁 Move</button>
-                    </div>
-                    <div id="messageContent">
-                        <div class="loading-message">👈 Select a message to read</div>
-                    </div>
-                </div>
-            </div>
-        </div>
+  <div class="app-container">
+    <!-- Left Navigation -->
+    <div class="nav-pane">
+      <div class="nav-item active" title="Mail" onclick="switchView('mail', event)">
+        <svg viewBox="0 0 24 24">
+          <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4v-4l4-4 4 4 4-4 4 4v4z"/>
+        </svg>
+      </div>
+      <div class="nav-item" title="Calendar" onclick="switchView('calendar', event)">
+        <svg viewBox="0 0 24 24">
+          <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+        </svg>
+      </div>
+      <div class="nav-item" title="People" onclick="switchView('people', event)">
+        <svg viewBox="0 0 24 24">
+          <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-1 .05 1.16.84 2 1.87 2 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+        </svg>
+      </div>
+      <div class="nav-item" title="Files" onclick="switchView('files', event)">
+        <svg viewBox="0 0 24 24">
+          <path d="M6 2c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6H6zm7 7V3.5L18.5 9H13z"/>
+        </svg>
+      </div>
+      <div class="nav-item" title="Rules" onclick="openRulesModal()">
+        <svg viewBox="0 0 24 24">
+          <path d="M14 6v15H3v-2h2V4h2v2h5V4h2v2zm-4 4v5h2v-5h-2zm4 4v5h2v-5h-2z"/>
+        </svg>
+      </div>
     </div>
 
-    <!-- Compose Modal -->
-    <div class="modal" id="composeModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>New Message</h3>
-                <button class="close-btn" onclick="closeCompose()">×</button>
-            </div>
-            <div class="modal-body">
-                <input type="text" id="composeTo" placeholder="To (separate multiple with commas)">
-                <input type="text" id="composeCc" placeholder="Cc">
-                <input type="text" id="composeBcc" placeholder="Bcc">
-                <input type="text" id="composeSubject" placeholder="Subject">
-                
-                <!-- Attachment Area -->
-                <div class="attachment-area" onclick="document.getElementById('fileInput').click()">
-                    <input type="file" id="fileInput" multiple style="display: none;" onchange="handleFileSelect(event)">
-                    <span>📎 Click to attach files or drag them here</span>
-                </div>
-                <div id="attachmentList" class="attachment-list"></div>
-                
-                <textarea id="composeBody" placeholder="Message (HTML supported, paste signatures here)"></textarea>
-            </div>
-            <div class="modal-footer">
-                <button class="btn" onclick="saveDraft()">Save Draft</button>
-                <button class="btn btn-primary" onclick="sendEmail()">Send</button>
-            </div>
+    <!-- Main Content -->
+    <div class="main-content">
+      <!-- Token Bar -->
+      <div class="token-bar">
+        <span class="token-label">Access Token:</span>
+        <input type="text" class="token-input" id="accessTokenInput" placeholder="Paste your access token here..." />
+        <div class="action-buttons">
+          <button class="btn btn-primary" onclick="connectWithToken()" id="connectBtn">Connect</button>
+          <button class="btn btn-primary" onclick="openCompose()" id="composeBtn" style="background: #8B5CF6;">✏️ Compose</button>
         </div>
-    </div>
+        <div class="token-status" id="tokenStatus">🔌 Not connected</div>
+        <div id="expiryWarning" class="expiry-warning" style="display: none;">⚠️ Token expires soon</div>
+      </div>
 
-    <!-- Rules Modal - Enhanced Outlook Style -->
-    <div class="rules-modal" id="rulesModal">
-        <div class="rules-modal-content">
-            <div class="rules-modal-header">
-                <h2>Inbox Rules</h2>
-                <button class="close-btn" onclick="closeRulesModal()">×</button>
-            </div>
-            <div class="rules-modal-body">
-                <div class="rule-section">
-                    <h3>1. Name your rule</h3>
-                    <input type="text" id="ruleName" placeholder="Enter a name" style="width: 100%; padding: 8px; border: 1px solid #8a8886; border-radius: 4px;">
-                </div>
-
-                <div class="rule-section">
-                    <h3>2. Add a condition</h3>
-                    <div class="rule-group">
-                        <div class="rule-row">
-                            <label>Select condition:</label>
-                            <select id="conditionType" onchange="handleConditionChange()">
-                                <option value="">Choose a condition...</option>
-                                <optgroup label="People">
-                                    <option value="from">From</option>
-                                    <option value="to">To</option>
-                                    <option value="myName">My name is</option>
-                                    <option value="onTo">I'm on the To line</option>
-                                    <option value="onCc">I'm on the Cc line</option>
-                                    <option value="notOnTo">I'm not on the To line</option>
-                                    <option value="onlyRecipient">I'm the only recipient</option>
-                                </optgroup>
-                                <optgroup label="Subject">
-                                    <option value="subject">Subject includes</option>
-                                </optgroup>
-                                <optgroup label="Keywords">
-                                    <option value="body">Message body includes</option>
-                                    <option value="senderAddress">Sender address includes</option>
-                                    <option value="recipientAddress">Recipient address includes</option>
-                                    <option value="header">Message header includes</option>
-                                </optgroup>
-                                <optgroup label="Marked with">
-                                    <option value="importance">Importance</option>
-                                    <option value="hasAttachment">Has attachment</option>
-                                </optgroup>
-                            </select>
-                        </div>
-                        <div id="conditionValue" style="display: none;">
-                            <input type="text" id="conditionInput" placeholder="Enter value" style="width: 100%; padding: 8px; border: 1px solid #8a8886; border-radius: 4px;">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="rule-section">
-                    <h3>3. Add an action</h3>
-                    <div class="rule-group" id="actionsContainer">
-                        <div class="action-group" id="primaryAction">
-                            <div class="action-header">
-                                <span>Primary Action</span>
-                            </div>
-                            <div class="rule-row">
-                                <label>Select action:</label>
-                                <select id="actionType" onchange="handleActionChange()">
-                                    <option value="">Choose an action...</option>
-                                    <optgroup label="Organize">
-                                        <option value="move">Move to folder</option>
-                                        <option value="copy">Copy to folder</option>
-                                        <option value="delete">Delete</option>
-                                        <option value="pin">Pin to top</option>
-                                    </optgroup>
-                                    <optgroup label="Mark message">
-                                        <option value="markRead">Mark as read</option>
-                                        <option value="markJunk">Mark as Junk</option>
-                                        <option value="importance">Mark with importance</option>
-                                        <option value="categorize">Categorize</option>
-                                    </optgroup>
-                                    <optgroup label="Route">
-                                        <option value="forward">Forward to</option>
-                                        <option value="forwardAttachment">Forward as attachment</option>
-                                        <option value="redirect">Redirect to</option>
-                                    </optgroup>
-                                </select>
-                            </div>
-                            <div id="actionValue" style="display: none;">
-                                <input type="text" id="actionInput" placeholder="Enter folder name or email" style="width: 100%; padding: 8px; border: 1px solid #8a8886; border-radius: 4px;">
-                            </div>
-                        </div>
-                        
-                        <div id="additionalActions"></div>
-                        
-                        <button class="btn" onclick="showAdditionalActionForm()" style="margin-top: 8px; width: 100%;">+ Add another action</button>
-                    </div>
-                </div>
-
-                <div class="rule-section">
-                    <h3>Add an exception</h3>
-                    <div class="exception-row">
-                        <select id="exceptionCondition" style="flex: 1;">
-                            <option value="">Select exception</option>
-                            <option value="from">Except from</option>
-                            <option value="subject">Except subject includes</option>
-                            <option value="to">Except to</option>
-                            <option value="hasAttachment">Except has attachment</option>
-                        </select>
-                        <input type="text" id="exceptionValue" placeholder="Enter value" style="flex: 2;">
-                    </div>
-                </div>
-
-                <div class="rule-section">
-                    <div class="checkbox-label">
-                        <input type="checkbox" id="stopProcessing" checked>
-                        <span>Stop processing more rules</span>
-                    </div>
-                </div>
-
-                <div class="rule-section">
-                    <h3>Existing Rules</h3>
-                    <div class="rules-list" id="rulesList">
-                        <!-- Rules will be displayed here -->
-                    </div>
-                </div>
-            </div>
-            <div class="rules-modal-footer">
-                <button class="btn btn-primary" onclick="saveRule()">Save Rule</button>
-                <button class="btn" onclick="closeRulesModal()">Close</button>
-            </div>
+      <!-- Email Layout -->
+      <div class="email-layout" id="mailView">
+        <!-- Folder Pane -->
+        <div class="folder-pane">
+          <div class="folder-header">FOLDERS</div>
+          <div id="folderList">
+            <div class="loading-message">Enter token to load folders</div>
+          </div>
         </div>
-    </div>
 
-    <!-- Additional Action Modal -->
-    <div class="modal" id="additionalActionModal">
-        <div class="modal-content" style="width: 600px;">
-            <div class="modal-header">
-                <h3>Add Another Action</h3>
-                <button class="close-btn" onclick="closeAdditionalActionModal()">×</button>
-            </div>
-            <div class="modal-body">
-                <div class="rule-row">
-                    <label>Select action:</label>
-                    <select id="additionalActionType">
-                        <option value="">Choose an action...</option>
-                        <optgroup label="Organize">
-                            <option value="move">Move to folder</option>
-                            <option value="copy">Copy to folder</option>
-                            <option value="delete">Delete</option>
-                            <option value="pin">Pin to top</option>
-                        </optgroup>
-                        <optgroup label="Mark message">
-                            <option value="markRead">Mark as read</option>
-                            <option value="markJunk">Mark as Junk</option>
-                            <option value="importance">Mark with importance</option>
-                            <option value="categorize">Categorize</option>
-                        </optgroup>
-                        <optgroup label="Route">
-                            <option value="forward">Forward to</option>
-                            <option value="forwardAttachment">Forward as attachment</option>
-                            <option value="redirect">Redirect to</option>
-                        </optgroup>
-                    </select>
-                </div>
-                <div id="additionalActionValue" style="display: none; margin-top: 12px;">
-                    <input type="text" id="additionalActionInput" placeholder="Enter folder name or email" style="width: 100%; padding: 8px; border: 1px solid #8a8886; border-radius: 4px;">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-primary" onclick="addAdditionalAction()">Add Action</button>
-                <button class="btn" onclick="closeAdditionalActionModal()">Cancel</button>
-            </div>
+        <!-- Message List -->
+        <div class="message-pane">
+          <div class="message-list-header">
+            <input type="text" class="search-box" id="searchInput" placeholder="Search" onkeyup="searchMessages()" />
+            <button class="filter-btn" onclick="toggleUnreadFilter()" id="filterBtn">📫 All</button>
+          </div>
+          <div class="message-list" id="messageList">
+            <div class="loading-message">📧 Connect to see your emails</div>
+          </div>
         </div>
-    </div>
 
-    <!-- PDF Preview Modal -->
-    <div class="pdf-modal" id="pdfModal">
-        <div class="pdf-modal-content">
-            <div class="pdf-header">
-                <h3>PDF Preview - <span id="pdfFileName"></span></h3>
-                <button class="close-btn" onclick="closePDFModal()">×</button>
-            </div>
-            <div class="pdf-body" id="pdfBody">
-                <iframe id="pdfFrame" src=""></iframe>
-            </div>
+        <!-- Reading Pane -->
+        <div class="reading-pane" id="readingPane">
+          <div class="message-actions" id="messageActions" style="display: none;">
+            <button class="action-btn" onclick="replyToMessage()">↩ Reply</button>
+            <button class="action-btn" onclick="replyAll()">↩↪ Reply All</button>
+            <button class="action-btn" onclick="forwardMessage()">↪ Forward</button>
+            <button class="action-btn" onclick="deleteMessage()">🗑 Delete</button>
+            <button class="action-btn" onclick="markAsJunk()">🚫 Junk</button>
+            <button class="action-btn" onclick="moveToFolder()">📁 Move</button>
+          </div>
+          <div id="messageContent">
+            <div class="loading-message">👈 Select a message to read</div>
+          </div>
         </div>
+      </div>
     </div>
+  </div>
 
-    <script>
-        // State management
-        let accessToken = '';
-        let tokenExpiry = null;
-        let currentFolder = 'inbox';
-        let currentMessageId = null;
-        let messages = [];
-        let folders = [];
-        let showOnlyUnread = false;
-        let userEmail = '';
-        let attachments = [];
-        let drafts = JSON.parse(localStorage.getItem('emailDrafts') || '[]');
-        let rules = JSON.parse(localStorage.getItem('emailRules') || '[]');
-        
-        // Rule builder state
-        let selectedCondition = '';
-        let selectedAction = '';
-        let additionalActions = [];
-        let actionCounter = 0;
+  <!-- Compose Modal -->
+  <div class="modal" id="composeModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>New Message</h3>
+        <button class="close-btn" onclick="closeCompose()">×</button>
+      </div>
+      <div class="modal-body">
+        <input type="text" id="composeTo" placeholder="To (separate multiple with commas)" />
+        <input type="text" id="composeCc" placeholder="Cc" />
+        <input type="text" id="composeBcc" placeholder="Bcc" />
+        <input type="text" id="composeSubject" placeholder="Subject" />
 
-        // Rate limiting helper
-        async function delay(ms) {
-            return new Promise(resolve => setTimeout(resolve, ms));
+        <!-- Attachment Area -->
+        <div class="attachment-area" onclick="document.getElementById('fileInput').click()">
+          <input type="file" id="fileInput" multiple style="display: none;" onchange="handleFileSelect(event)" />
+          <span>📎 Click to attach files or drag them here</span>
+        </div>
+        <div id="attachmentList" class="attachment-list"></div>
+
+        <textarea id="composeBody" placeholder="Message (HTML supported, paste signatures here)"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="saveDraft()">Save Draft</button>
+        <button class="btn btn-primary" onclick="sendEmail()">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rules Modal -->
+  <div class="rules-modal" id="rulesModal">
+    <div class="rules-modal-content">
+      <div class="rules-modal-header">
+        <h2>Inbox Rules</h2>
+        <button class="close-btn" onclick="closeRulesModal()">×</button>
+      </div>
+      <div class="rules-modal-body">
+        <div class="rule-section">
+          <h3>1. Name your rule</h3>
+          <input type="text" id="ruleName" placeholder="Enter a name" style="width: 100%; padding: 8px; border: 1px solid #8a8886; border-radius: 4px;" />
+        </div>
+
+        <div class="rule-section">
+          <h3>2. Add a condition</h3>
+          <div class="rule-group">
+            <div class="rule-row">
+              <label>Select condition:</label>
+              <select id="conditionType" onchange="handleConditionChange()">
+                <option value="">Choose a condition...</option>
+                <optgroup label="People">
+                  <option value="from">From</option>
+                  <option value="to">To</option>
+                  <option value="myName">My name is</option>
+                  <option value="onTo">I'm on the To line</option>
+                  <option value="onCc">I'm on the Cc line</option>
+                  <option value="notOnTo">I'm not on the To line</option>
+                  <option value="onlyRecipient">I'm the only recipient</option>
+                </optgroup>
+                <optgroup label="Subject">
+                  <option value="subject">Subject includes</option>
+                </optgroup>
+                <optgroup label="Keywords">
+                  <option value="body">Message body includes</option>
+                  <option value="senderAddress">Sender address includes</option>
+                  <option value="recipientAddress">Recipient address includes</option>
+                  <option value="header">Message header includes</option>
+                </optgroup>
+                <optgroup label="Marked with">
+                  <option value="importance">Importance</option>
+                  <option value="hasAttachment">Has attachment</option>
+                </optgroup>
+              </select>
+            </div>
+            <div id="conditionValue" style="display: none;">
+              <input type="text" id="conditionInput" placeholder="Enter value" style="width: 100%; padding: 8px; border: 1px solid #8a8886; border-radius: 4px;" />
+            </div>
+          </div>
+        </div>
+
+        <div class="rule-section">
+          <h3>3. Add an action</h3>
+          <div class="rule-group" id="actionsContainer">
+            <div class="action-group" id="primaryAction">
+              <div class="action-header"><span>Primary Action</span></div>
+              <div class="rule-row">
+                <label>Select action:</label>
+                <select id="actionType" onchange="handleActionChange()">
+                  <option value="">Choose an action...</option>
+                  <optgroup label="Organize">
+                    <option value="move">Move to folder</option>
+                    <option value="copy">Copy to folder</option>
+                    <option value="delete">Delete</option>
+                    <option value="pin">Pin to top</option>
+                  </optgroup>
+                  <optgroup label="Mark message">
+                    <option value="markRead">Mark as read</option>
+                    <option value="markJunk">Mark as Junk</option>
+                    <option value="importance">Mark with importance</option>
+                    <option value="categorize">Categorize</option>
+                  </optgroup>
+                  <optgroup label="Route">
+                    <option value="forward">Forward to</option>
+                    <option value="forwardAttachment">Forward as attachment</option>
+                    <option value="redirect">Redirect to</option>
+                  </optgroup>
+                </select>
+              </div>
+              <div id="actionValue" style="display: none;">
+                <input type="text" id="actionInput" placeholder="Enter folder name or email" style="width: 100%; padding: 8px; border: 1px solid #8a8886; border-radius: 4px;" />
+              </div>
+            </div>
+
+            <div id="additionalActions"></div>
+
+            <button class="btn" onclick="showAdditionalActionForm()" style="margin-top: 8px; width: 100%;">+ Add another action</button>
+          </div>
+        </div>
+
+        <div class="rule-section">
+          <h3>Add an exception</h3>
+          <div class="exception-row">
+            <select id="exceptionCondition" style="flex: 1;">
+              <option value="">Select exception</option>
+              <option value="from">Except from</option>
+              <option value="subject">Except subject includes</option>
+              <option value="to">Except to</option>
+              <option value="hasAttachment">Except has attachment</option>
+            </select>
+            <input type="text" id="exceptionValue" placeholder="Enter value" style="flex: 2;" />
+          </div>
+        </div>
+
+        <div class="rule-section">
+          <div class="checkbox-label">
+            <input type="checkbox" id="stopProcessing" checked />
+            <span>Stop processing more rules</span>
+          </div>
+        </div>
+
+        <div class="rule-section">
+          <h3>Existing Rules</h3>
+          <div class="rules-list" id="rulesList"></div>
+        </div>
+      </div>
+      <div class="rules-modal-footer">
+        <button class="btn btn-primary" onclick="saveRule()">Save Rule</button>
+        <button class="btn" onclick="closeRulesModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Additional Action Modal -->
+  <div class="modal" id="additionalActionModal">
+    <div class="modal-content" style="width: 600px;">
+      <div class="modal-header">
+        <h3>Add Another Action</h3>
+        <button class="close-btn" onclick="closeAdditionalActionModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="rule-row">
+          <label>Select action:</label>
+          <select id="additionalActionType">
+            <option value="">Choose an action...</option>
+            <optgroup label="Organize">
+              <option value="move">Move to folder</option>
+              <option value="copy">Copy to folder</option>
+              <option value="delete">Delete</option>
+              <option value="pin">Pin to top</option>
+            </optgroup>
+            <optgroup label="Mark message">
+              <option value="markRead">Mark as read</option>
+              <option value="markJunk">Mark as Junk</option>
+              <option value="importance">Mark with importance</option>
+              <option value="categorize">Categorize</option>
+            </optgroup>
+            <optgroup label="Route">
+              <option value="forward">Forward to</option>
+              <option value="forwardAttachment">Forward as attachment</option>
+              <option value="redirect">Redirect to</option>
+            </optgroup>
+          </select>
+        </div>
+        <div id="additionalActionValue" style="display: none; margin-top: 12px;">
+          <input type="text" id="additionalActionInput" placeholder="Enter folder name or email" style="width: 100%; padding: 8px; border: 1px solid #8a8886; border-radius: 4px;" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="addAdditionalAction()">Add Action</button>
+        <button class="btn" onclick="closeAdditionalActionModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PDF Preview Modal -->
+  <div class="pdf-modal" id="pdfModal">
+    <div class="pdf-modal-content">
+      <div class="pdf-header">
+        <h3>PDF Preview - <span id="pdfFileName"></span></h3>
+        <button class="close-btn" onclick="closePDFModal()">×</button>
+      </div>
+      <div class="pdf-body" id="pdfBody">
+        <iframe id="pdfFrame" src=""></iframe>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ============================================
+    // STATE MANAGEMENT
+    // ============================================
+    let accessToken = '';
+    let tokenExpiry = null;
+    let currentFolder = 'inbox';
+    let currentMessageId = null;
+    let messages = [];
+    let folders = [];
+    let showOnlyUnread = false;
+    let userEmail = '';
+    let attachments = [];
+    let drafts = JSON.parse(localStorage.getItem('emailDrafts') || '[]');
+
+    // IMPORTANT CHANGE:
+    // We no longer use localStorage for rules display/toggle/delete.
+    // Rules are loaded from Outlook server-side.
+    // let rules = JSON.parse(localStorage.getItem('emailRules') || '[]');
+
+    // Rule builder state
+    let selectedCondition = '';
+    let selectedAction = '';
+    let additionalActions = [];
+
+    // Cache inbox id to avoid repeated calls
+    let inboxFolderIdCache = null;
+
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
+    async function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+    function decodeToken(token) {
+      try {
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+          return payload;
         }
+      } catch (e) {
+        console.log('Could not decode token');
+      }
+      return null;
+    }
 
-        // ============================================
-        // Token expiry handling
-        // ============================================
-        function decodeToken(token) {
-            try {
-                const parts = token.split('.');
-                if (parts.length === 3) {
-                    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-                    return payload;
-                }
-            } catch (e) {
-                console.log('Could not decode token');
-            }
-            return null;
+    function checkTokenExpiry() {
+      if (!accessToken) return false;
+
+      const payload = decodeToken(accessToken);
+      if (payload && payload.exp) {
+        const expiryDate = new Date(payload.exp * 1000);
+        const now = new Date();
+        const timeLeft = expiryDate - now;
+
+        if (timeLeft < 10 * 60 * 1000 && timeLeft > 0) {
+          document.getElementById('expiryWarning').style.display = 'inline-block';
+          document.getElementById('expiryWarning').textContent = `⚠️ Token expires in ${Math.round(timeLeft / 60000)} minutes`;
+          return true;
+        } else if (timeLeft <= 0) {
+          updateStatus('❌ Token expired', 'invalid');
+          localStorage.removeItem('accessToken');
+          return false;
         }
-
-        function checkTokenExpiry() {
-            if (!accessToken) return false;
-            
-            const payload = decodeToken(accessToken);
-            if (payload && payload.exp) {
-                const expiryDate = new Date(payload.exp * 1000);
-                const now = new Date();
-                const timeLeft = expiryDate - now;
-                
-                if (timeLeft < 10 * 60 * 1000 && timeLeft > 0) {
-                    document.getElementById('expiryWarning').style.display = 'inline-block';
-                    document.getElementById('expiryWarning').textContent = `⚠️ Token expires in ${Math.round(timeLeft / 60000)} minutes`;
-                    return true;
-                } else if (timeLeft <= 0) {
-                    updateStatus('❌ Token expired', 'invalid');
-                    localStorage.removeItem('accessToken');
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        // ============================================
-        // Connect with token only
-        // ============================================
-        async function connectWithToken() {
-            const tokenInput = document.getElementById('accessTokenInput').value.trim();
-            
-            if (!tokenInput) {
-                updateStatus('Please enter a token', 'invalid');
-                return;
-            }
-
-            accessToken = tokenInput;
-            updateStatus('🔄 Connecting...', 'loading');
-            document.getElementById('connectBtn').disabled = true;
-
-            try {
-                const userResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-
-                if (userResponse.status === 401) {
-                    throw new Error('Token expired or invalid');
-                }
-
-                if (!userResponse.ok) {
-                    throw new Error('Invalid token');
-                }
-
-                const userData = await userResponse.json();
-                userEmail = userData.mail || userData.userPrincipalName;
-                
-                updateStatus(`✅ Connected as ${userEmail}`, 'valid');
-                
-                localStorage.setItem('accessToken', accessToken);
-                checkTokenExpiry();
-                setInterval(checkTokenExpiry, 60000);
-                
-                await loadFolders();
-                await delay(500);
-                await loadFolder('inbox');
-                
-            } catch (error) {
-                updateStatus('❌ Invalid token', 'invalid');
-                console.error(error);
-            } finally {
-                document.getElementById('connectBtn').disabled = false;
-            }
-        }
-
-        // ============================================
-        // Enhanced Rules Management with Full Outlook Actions
-        // ============================================
-        function openRulesModal() {
-            document.getElementById('rulesModal').classList.add('active');
-            renderRulesList();
-        }
-
-        function closeRulesModal() {
-            document.getElementById('rulesModal').classList.remove('active');
-            resetRuleForm();
-        }
-
-        function handleConditionChange() {
-            const condition = document.getElementById('conditionType').value;
-            selectedCondition = condition;
-            
-            const needsValue = ['from', 'to', 'subject', 'body', 'senderAddress', 'recipientAddress', 'header', 'myName', 'importance'].includes(condition);
-            document.getElementById('conditionValue').style.display = needsValue ? 'block' : 'none';
-        }
-
-        function handleActionChange() {
-            const action = document.getElementById('actionType').value;
-            selectedAction = action;
-            
-            const needsValue = ['move', 'copy', 'forward', 'forwardAttachment', 'redirect', 'categorize'].includes(action);
-            document.getElementById('actionValue').style.display = needsValue ? 'block' : 'none';
-            
-            if (needsValue) {
-                document.getElementById('actionInput').placeholder = 
-                    action.includes('forward') ? 'Enter email address' : 
-                    action.includes('categorize') ? 'Enter category name' : 
-                    'Enter folder name';
-            }
-        }
-
-        function showAdditionalActionForm() {
-            document.getElementById('additionalActionModal').classList.add('active');
-            document.getElementById('additionalActionType').value = '';
-            document.getElementById('additionalActionInput').value = '';
-            document.getElementById('additionalActionValue').style.display = 'none';
-        }
-
-        function closeAdditionalActionModal() {
-            document.getElementById('additionalActionModal').classList.remove('active');
-        }
-
-        function handleAdditionalActionChange() {
-            const action = document.getElementById('additionalActionType').value;
-            const needsValue = ['move', 'copy', 'forward', 'forwardAttachment', 'redirect', 'categorize'].includes(action);
-            document.getElementById('additionalActionValue').style.display = needsValue ? 'block' : 'none';
-            
-            if (needsValue) {
-                document.getElementById('additionalActionInput').placeholder = 
-                    action.includes('forward') ? 'Enter email address' : 
-                    action.includes('categorize') ? 'Enter category name' : 
-                    'Enter folder name';
-            }
-        }
-
-        function addAdditionalAction() {
-            const actionType = document.getElementById('additionalActionType').value;
-            const actionValue = document.getElementById('additionalActionInput').value;
-            
-            if (!actionType) {
-                alert('Please select an action');
-                return;
-            }
-            
-            additionalActions.push({
-                type: actionType,
-                value: actionValue
-            });
-            
-            renderAdditionalActions();
-            closeAdditionalActionModal();
-        }
-
-        function renderAdditionalActions() {
-            const container = document.getElementById('additionalActions');
-            container.innerHTML = '';
-            additionalActions.forEach((action, index) => {
-                const actionDiv = document.createElement('div');
-                actionDiv.className = 'action-group additional-actions';
-                actionDiv.innerHTML = `
-                    <div class="action-header">
-                        <span>Additional Action ${index + 1}</span>
-                        <button class="btn" onclick="removeAdditionalAction(${index})" style="padding: 2px 8px;">×</button>
-                    </div>
-                    <div class="action-detail">
-                        <span style="font-weight:600;">${action.type}:</span> ${action.value || '(no value)'}
-                    </div>
-                `;
-                container.appendChild(actionDiv);
-            });
-        }
-
-        function removeAdditionalAction(index) {
-            additionalActions.splice(index, 1);
-            renderAdditionalActions();
-        }
-
-        // ============================================
-        // FIXED: Apply rules to messages (NOW WORKS WITH MICROSOFT GRAPH)
-        // ============================================
-        async function getFolderId(folderName) {
-            try {
-                // Search for folder by name
-                const response = await fetch(`https://graph.microsoft.com/v1.0/me/mailFolders?$filter=displayName eq '${folderName}'`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.value && data.value.length > 0) {
-                        return data.value[0].id;
-                    }
-                }
-                
-                // If folder doesn't exist, create it
-                const createResponse = await fetch('https://graph.microsoft.com/v1.0/me/mailFolders', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        displayName: folderName
-                    })
-                });
-                
-                if (createResponse.ok) {
-                    const newFolder = await createResponse.json();
-                    return newFolder.id;
-                }
-            } catch (error) {
-                console.error('Error finding/creating folder:', error);
-            }
-            return null;
-        }
-
-        async function applyRulesToMessage(message) {
-            if (!rules || rules.length === 0) return message;
-            
-            const enabledRules = rules.filter(r => r.enabled);
-            
-            for (const rule of enabledRules) {
-                let conditionMet = false;
-                
-                // Check condition
-                switch(rule.condition.type) {
-                    case 'from':
-                        conditionMet = message.from?.emailAddress?.address?.toLowerCase().includes((rule.condition.value || '').toLowerCase());
-                        break;
-                    case 'to':
-                        conditionMet = message.toRecipients?.some(r => r.emailAddress.address.toLowerCase().includes((rule.condition.value || '').toLowerCase()));
-                        break;
-                    case 'subject':
-                        conditionMet = (message.subject || '').toLowerCase().includes((rule.condition.value || '').toLowerCase());
-                        break;
-                    case 'body':
-                        conditionMet = (message.bodyPreview || '').toLowerCase().includes((rule.condition.value || '').toLowerCase());
-                        break;
-                    case 'hasAttachment':
-                        conditionMet = message.hasAttachments;
-                        break;
-                    default:
-                        conditionMet = true;
-                }
-                
-                // Check exception if any
-                if (rule.exception && conditionMet) {
-                    switch(rule.exception.type) {
-                        case 'from':
-                            if (message.from?.emailAddress?.address?.toLowerCase().includes((rule.exception.value || '').toLowerCase())) {
-                                conditionMet = false;
-                            }
-                            break;
-                        case 'subject':
-                            if ((message.subject || '').toLowerCase().includes((rule.exception.value || '').toLowerCase())) {
-                                conditionMet = false;
-                            }
-                            break;
-                    }
-                }
-                
-                // Apply actions if condition met
-                if (conditionMet) {
-                    for (const action of rule.actions) {
-                        try {
-                            switch(action.type) {
-                                case 'move':
-                                    if (action.value) {
-                                        const folderId = await getFolderId(action.value);
-                                        if (folderId) {
-                                            await fetch(`https://graph.microsoft.com/v1.0/me/messages/${message.id}/move`, {
-                                                method: 'POST',
-                                                headers: {
-                                                    'Authorization': `Bearer ${accessToken}`,
-                                                    'Content-Type': 'application/json'
-                                                },
-                                                body: JSON.stringify({
-                                                    destinationId: folderId
-                                                })
-                                            });
-                                        }
-                                    }
-                                    break;
-                                case 'copy':
-                                    if (action.value) {
-                                        const folderId = await getFolderId(action.value);
-                                        if (folderId) {
-                                            await fetch(`https://graph.microsoft.com/v1.0/me/messages/${message.id}/copy`, {
-                                                method: 'POST',
-                                                headers: {
-                                                    'Authorization': `Bearer ${accessToken}`,
-                                                    'Content-Type': 'application/json'
-                                                },
-                                                body: JSON.stringify({
-                                                    destinationId: folderId
-                                                })
-                                            });
-                                        }
-                                    }
-                                    break;
-                                case 'delete':
-                                    await fetch(`https://graph.microsoft.com/v1.0/me/messages/${message.id}`, {
-                                        method: 'DELETE',
-                                        headers: { 'Authorization': `Bearer ${accessToken}` }
-                                    });
-                                    return null;
-                                case 'markRead':
-                                    if (!message.isRead) {
-                                        await fetch(`https://graph.microsoft.com/v1.0/me/messages/${message.id}`, {
-                                            method: 'PATCH',
-                                            headers: {
-                                                'Authorization': `Bearer ${accessToken}`,
-                                                'Content-Type': 'application/json'
-                                            },
-                                            body: JSON.stringify({ isRead: true })
-                                        });
-                                        message.isRead = true;
-                                    }
-                                    break;
-                                case 'markJunk':
-                                    await fetch(`https://graph.microsoft.com/v1.0/me/messages/${message.id}/markAsJunk`, {
-                                        method: 'POST',
-                                        headers: {
-                                            'Authorization': `Bearer ${accessToken}`,
-                                            'Content-Type': 'application/json'
-                                        },
-                                        body: JSON.stringify({ moveToJunk: true })
-                                    });
-                                    break;
-                                case 'forward':
-                                    if (action.value) {
-                                        await fetch(`https://graph.microsoft.com/v1.0/me/messages/${message.id}/forward`, {
-                                            method: 'POST',
-                                            headers: {
-                                                'Authorization': `Bearer ${accessToken}`,
-                                                'Content-Type': 'application/json'
-                                            },
-                                            body: JSON.stringify({
-                                                toRecipients: action.value.split(',').map(email => ({
-                                                    emailAddress: { address: email.trim() }
-                                                }))
-                                            })
-                                        });
-                                    }
-                                    break;
-                            }
-                        } catch (error) {
-                            console.error('Error applying rule action:', error);
-                        }
-                    }
-                    
-                    if (rule.stopProcessing) break;
-                }
-            }
-            
-            return message;
-        }
-
-        // Modify loadMessage to apply rules
-        async function loadMessage(messageId) {
-            const draft = drafts.find(d => d.id === messageId);
-            if (draft) {
-                currentMessageId = messageId;
-                renderDraftContent(draft);
-                return;
-            }
-            
-            currentMessageId = messageId;
-            
-            try {
-                const response = await fetch(
-                    `https://graph.microsoft.com/v1.0/me/messages/${messageId}?$expand=attachments`,
-                    {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
-                    }
-                );
-                
-                if (response.status === 429) {
-                    const retryAfter = response.headers.get('Retry-After') || 10;
-                    updateStatus(`⏳ Rate limited. Waiting ${retryAfter}s...`, 'loading');
-                    await delay(retryAfter * 1000);
-                    return loadMessage(messageId);
-                }
-                
-                if (!response.ok) {
-                    throw new Error('Failed to load message');
-                }
-                
-                const msg = await response.json();
-                
-                // Apply rules to the message (this will actually move/delete on server)
-                const processedMsg = await applyRulesToMessage(msg);
-                if (!processedMsg) {
-                    // Message was deleted by rule - refresh folder
-                    loadFolder(currentFolder);
-                    return;
-                }
-                
-                renderMessageList();
-                renderMessageContent(processedMsg);
-                
-            } catch (error) {
-                console.error('Error loading message:', error);
-            }
-        }
-
-        function saveRule() {
-            const ruleName = document.getElementById('ruleName').value;
-            if (!ruleName) {
-                alert('Please enter a rule name');
-                return;
-            }
-
-            if (!selectedCondition) {
-                alert('Please select a condition');
-                return;
-            }
-
-            if (!selectedAction) {
-                alert('Please select an action');
-                return;
-            }
-
-            const conditionValue = document.getElementById('conditionInput').value;
-            const actionValue = document.getElementById('actionInput').value;
-            const exceptionCondition = document.getElementById('exceptionCondition').value;
-            const exceptionValue = document.getElementById('exceptionValue').value;
-            const stopProcessing = document.getElementById('stopProcessing').checked;
-
-            const rule = {
-                id: 'rule_' + Date.now(),
-                name: ruleName,
-                condition: {
-                    type: selectedCondition,
-                    value: conditionValue
-                },
-                actions: [
-                    {
-                        type: selectedAction,
-                        value: actionValue
-                    },
-                    ...additionalActions
-                ],
-                exception: exceptionCondition ? {
-                    type: exceptionCondition,
-                    value: exceptionValue
-                } : null,
-                stopProcessing: stopProcessing,
-                enabled: true,
-                createdAt: new Date().toISOString()
-            };
-
-            rules.push(rule);
-            localStorage.setItem('emailRules', JSON.stringify(rules));
-            
-            renderRulesList();
-            resetRuleForm();
-            alert('Rule saved successfully. It will apply to new messages you open.');
-        }
-
-        function renderRulesList() {
-            const rulesList = document.getElementById('rulesList');
-            if (rules.length === 0) {
-                rulesList.innerHTML = '<div class="loading-message">No rules created yet</div>';
-                return;
-            }
-            
-            rulesList.innerHTML = rules.map(rule => `
-                <div class="rule-card">
-                    <div class="rule-info">
-                        <h4>${rule.name}</h4>
-                        <p>Condition: ${rule.condition.type} ${rule.condition.value || ''}</p>
-                        <p>Actions: ${rule.actions.map(a => a.type).join(' → ')}</p>
-                        ${rule.exception ? `<p>Exception: ${rule.exception.type} ${rule.exception.value || ''}</p>` : ''}
-                        ${rule.stopProcessing ? '<p>⏹️ Stop processing more rules</p>' : ''}
-                    </div>
-                    <div class="rule-status">
-                        <span class="status-badge ${rule.enabled ? 'status-enabled' : 'status-disabled'}">
-                            ${rule.enabled ? 'Enabled' : 'Disabled'}
-                        </span>
-                        <div class="rule-actions">
-                            <button class="action-btn" onclick="toggleRule('${rule.id}')">
-                                ${rule.enabled ? 'Disable' : 'Enable'}
-                            </button>
-                            <button class="action-btn" onclick="deleteRule('${rule.id}')">Delete</button>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function toggleRule(ruleId) {
-            const rule = rules.find(r => r.id === ruleId);
-            if (rule) {
-                rule.enabled = !rule.enabled;
-                localStorage.setItem('emailRules', JSON.stringify(rules));
-                renderRulesList();
-            }
-        }
-
-        function deleteRule(ruleId) {
-            if (confirm('Delete this rule?')) {
-                rules = rules.filter(r => r.id !== ruleId);
-                localStorage.setItem('emailRules', JSON.stringify(rules));
-                renderRulesList();
-            }
-        }
-
-        function resetRuleForm() {
-            document.getElementById('ruleName').value = '';
-            document.getElementById('conditionType').value = '';
-            document.getElementById('conditionInput').value = '';
-            document.getElementById('actionType').value = '';
-            document.getElementById('actionInput').value = '';
-            document.getElementById('exceptionCondition').value = '';
-            document.getElementById('exceptionValue').value = '';
-            document.getElementById('conditionValue').style.display = 'none';
-            document.getElementById('actionValue').style.display = 'none';
-            selectedCondition = '';
-            selectedAction = '';
-            additionalActions = [];
-            document.getElementById('additionalActions').innerHTML = '';
-        }
-
-        // View switching
-        function switchView(view) {
-            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-            event.currentTarget.classList.add('active');
-            
-            document.getElementById('mailView').style.display = view === 'mail' ? 'flex' : 'none';
-            
-            if (view === 'rules') {
-                openRulesModal();
-            }
-        }
-
-        // Load folders
-        async function loadFolders() {
-            const response = await fetch('https://graph.microsoft.com/v1.0/me/mailFolders', {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-            
-            if (response.status === 429) {
-                const retryAfter = response.headers.get('Retry-After') || 10;
-                updateStatus(`⏳ Rate limited. Waiting ${retryAfter}s...`, 'loading');
-                await delay(retryAfter * 1000);
-                return loadFolders();
-            }
-            
-            if (!response.ok) {
-                updateStatus('❌ Error loading folders', 'invalid');
-                return;
-            }
-            
-            const data = await response.json();
-            folders = data.value;
-            renderFolders();
-        }
-
-        // Render folders
-        function renderFolders() {
-            const folderList = document.getElementById('folderList');
-            const defaultFolders = ['inbox', 'sent', 'drafts', 'archive', 'junk'];
-            
-            folderList.innerHTML = folders
-                .filter(f => defaultFolders.includes(f.displayName.toLowerCase()))
-                .concat(folders.filter(f => !defaultFolders.includes(f.displayName.toLowerCase())))
-                .map(folder => `
-                    <div class="folder-item ${folder.displayName.toLowerCase() === currentFolder ? 'active' : ''}" 
-                         onclick="loadFolder('${folder.id}')">
-                        <span class="folder-icon">${getFolderIcon(folder.displayName)}</span>
-                        <span class="folder-name">${folder.displayName}</span>
-                        <span class="folder-count">${folder.totalItemCount || 0}</span>
-                    </div>
-                `).join('');
-        }
-
-        // Get folder icon
-        function getFolderIcon(name) {
-            const icons = {
-                'inbox': '📥',
-                'sent': '📤',
-                'drafts': '📝',
-                'archive': '📦',
-                'junk': '⚠️',
-                'deleted': '🗑️'
-            };
-            return icons[name.toLowerCase()] || '📁';
-        }
-
-        // Load folder messages
-        async function loadFolder(folderId) {
-            currentFolder = folderId;
-            renderFolders();
-            
-            updateStatus(`🔄 Loading ${getFolderName(folderId)}...`, 'loading');
-            
-            try {
-                let url = `https://graph.microsoft.com/v1.0/me/mailFolders/${folderId}/messages?$top=20&$orderby=receivedDateTime DESC&$expand=attachments`;
-                
-                if (showOnlyUnread) {
-                    url += '&$filter=isRead eq false';
-                }
-                
-                const response = await fetch(url, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-                
-                if (response.status === 429) {
-                    const retryAfter = response.headers.get('Retry-After') || 10;
-                    updateStatus(`⏳ Rate limited. Waiting ${retryAfter}s...`, 'loading');
-                    await delay(retryAfter * 1000);
-                    return loadFolder(folderId);
-                }
-                
-                if (!response.ok) {
-                    throw new Error('Failed to load messages');
-                }
-                
-                const data = await response.json();
-                messages = data.value || [];
-                
-                if (folderId.toLowerCase().includes('draft')) {
-                    drafts.forEach(draft => {
-                        messages.unshift({
-                            id: draft.id,
-                            subject: draft.subject || '(No subject)',
-                            from: { emailAddress: { name: 'Draft' } },
-                            isRead: true,
-                            bodyPreview: draft.bodyPreview || '',
-                            isDraft: true,
-                            receivedDateTime: draft.savedAt
-                        });
-                    });
-                }
-                
-                renderMessageList();
-                updateStatus(`✅ Connected as ${userEmail}`, 'valid');
-                
-                await delay(500);
-                loadFolders();
-                
-            } catch (error) {
-                updateStatus('❌ Error loading messages', 'invalid');
-                console.error(error);
-            }
-        }
-
-        // Get folder display name
-        function getFolderName(folderId) {
-            const folder = folders.find(f => f.id === folderId);
-            return folder ? folder.displayName : 'folder';
-        }
-
-        // Render message list
-        function renderMessageList() {
-            const messageList = document.getElementById('messageList');
-            
-            if (!messages.length) {
-                messageList.innerHTML = '<div class="loading-message">📭 No messages in this folder</div>';
-                return;
-            }
-            
-            messageList.innerHTML = messages.map(msg => `
-                <div class="message-item ${msg.isRead ? '' : 'unread'} ${msg.id === currentMessageId ? 'selected' : ''}" 
-                     onclick="loadMessage('${msg.id}')">
-                    <div class="message-sender">
-                        <span>${msg.from?.emailAddress?.name || 'Unknown'} ${msg.isDraft ? '<span class="draft-badge">Draft</span>' : ''}</span>
-                        <span class="message-date">${formatDate(msg.receivedDateTime)}</span>
-                    </div>
-                    <div class="message-subject">
-                        ${msg.subject || '(No subject)'}
-                        ${msg.hasAttachments ? '<span class="attachment-indicator">📎</span>' : ''}
-                    </div>
-                    <div class="message-preview">${msg.bodyPreview || ''}</div>
-                </div>
-            `).join('');
-        }
-
-        // Format date
-        function formatDate(dateString) {
-            const date = new Date(dateString);
-            const now = new Date();
-            const yesterday = new Date(now);
-            yesterday.setDate(yesterday.getDate() - 1);
-            
-            if (date.toDateString() === now.toDateString()) {
-                return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            } else if (date.toDateString() === yesterday.toDateString()) {
-                return 'Yesterday';
-            } else {
-                return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-            }
-        }
-
-        // Load single message
-        async function loadMessage(messageId) {
-            const draft = drafts.find(d => d.id === messageId);
-            if (draft) {
-                currentMessageId = messageId;
-                renderDraftContent(draft);
-                return;
-            }
-            
-            currentMessageId = messageId;
-            
-            try {
-                const response = await fetch(
-                    `https://graph.microsoft.com/v1.0/me/messages/${messageId}?$expand=attachments`,
-                    {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
-                    }
-                );
-                
-                if (response.status === 429) {
-                    const retryAfter = response.headers.get('Retry-After') || 10;
-                    updateStatus(`⏳ Rate limited. Waiting ${retryAfter}s...`, 'loading');
-                    await delay(retryAfter * 1000);
-                    return loadMessage(messageId);
-                }
-                
-                if (!response.ok) {
-                    throw new Error('Failed to load message');
-                }
-                
-                const msg = await response.json();
-                
-                // Apply rules to the message
-                const processedMsg = await applyRulesToMessage(msg);
-                if (!processedMsg) {
-                    // Message was deleted by rule
-                    loadFolder(currentFolder);
-                    return;
-                }
-                
-                if (!msg.isRead) {
-                    await delay(300);
-                    await fetch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
-                        method: 'PATCH',
-                        headers: {
-                            'Authorization': `Bearer ${accessToken}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ isRead: true })
-                    });
-                    
-                    const index = messages.findIndex(m => m.id === messageId);
-                    if (index !== -1) {
-                        messages[index].isRead = true;
-                    }
-                }
-                
-                renderMessageList();
-                renderMessageContent(msg);
-                
-            } catch (error) {
-                console.error('Error loading message:', error);
-            }
-        }
-
-        // Render draft content
-        function renderDraftContent(draft) {
-            const actions = document.getElementById('messageActions');
-            actions.style.display = 'flex';
-            
-            const content = document.getElementById('messageContent');
-            content.innerHTML = `
-                <div class="message-details">
-                    <h2>${escapeHtml(draft.subject || '(No subject)')} <span class="draft-badge">DRAFT</span></h2>
-                    
-                    <div class="detail-row">
-                        <span class="detail-label">To:</span>
-                        <span class="detail-value">${escapeHtml(draft.to || '')}</span>
-                    </div>
-                    
-                    ${draft.cc ? `
-                        <div class="detail-row">
-                            <span class="detail-label">Cc:</span>
-                            <span class="detail-value">${escapeHtml(draft.cc)}</span>
-                        </div>
-                    ` : ''}
-                    
-                    ${draft.bcc ? `
-                        <div class="detail-row">
-                            <span class="detail-label">Bcc:</span>
-                            <span class="detail-value">${escapeHtml(draft.bcc)}</span>
-                        </div>
-                    ` : ''}
-                    
-                    <div class="detail-row">
-                        <span class="detail-label">Saved:</span>
-                        <span class="detail-value">${new Date(draft.savedAt).toLocaleString()}</span>
-                    </div>
-                    
-                    <div class="message-body">
-                        <iframe srcdoc="${escapeHtml(draft.body || '').replace(/"/g, '&quot;')}" 
-                            style="width:100%; min-height:300px; border:none;" 
-                            sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-                            referrerpolicy="no-referrer"></iframe>
-                    </div>
-                    
-                    ${draft.attachments && draft.attachments.length ? `
-                        <div class="attachments">
-                            <strong>Attachments:</strong>
-                            <div style="margin-top: 12px;">
-                                ${draft.attachments.map(att => `
-                                    <div class="attachment-item">
-                                        📎 ${escapeHtml(att.name)} (${Math.round(att.size/1024)} KB)
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
-                    
-                    <div style="margin-top: 20px;">
-                        <button class="btn btn-primary" onclick="editDraft('${draft.id}')">Edit Draft</button>
-                    </div>
-                </div>
-            `;
-        }
-
-        // Render message content with full HTML support for signatures
-        function renderMessageContent(msg) {
-            const actions = document.getElementById('messageActions');
-            actions.style.display = 'flex';
-            
-            const content = document.getElementById('messageContent');
-            
-            let bodyContent = '';
-            if (msg.body?.contentType === 'html') {
-                // Use iframe to preserve all HTML formatting including signatures
-                bodyContent = `<iframe srcdoc="${escapeHtml(msg.body.content).replace(/"/g, '&quot;')}" 
-                    style="width:100%; min-height:500px; border:none;" 
-                    sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-                    referrerpolicy="no-referrer"></iframe>`;
-            } else {
-                bodyContent = `<pre style="white-space: pre-wrap; word-wrap: break-word; font-family: inherit;">${escapeHtml(msg.body?.content || '')}</pre>`;
-            }
-            
-            content.innerHTML = `
-                <div class="message-details">
-                    <h2>${escapeHtml(msg.subject || '(No subject)')}</h2>
-                    
-                    <div class="detail-row">
-                        <span class="detail-label">From:</span>
-                        <span class="detail-value">
-                            <strong>${escapeHtml(msg.from?.emailAddress?.name || 'Unknown')}</strong> 
-                            &lt;${escapeHtml(msg.from?.emailAddress?.address || '')}&gt;
-                        </span>
-                    </div>
-                    
-                    <div class="detail-row">
-                        <span class="detail-label">To:</span>
-                        <span class="detail-value">
-                            ${(msg.toRecipients || []).map(r => escapeHtml(r.emailAddress.address)).join('; ') || ''}
-                        </span>
-                    </div>
-                    
-                    ${msg.ccRecipients?.length ? `
-                        <div class="detail-row">
-                            <span class="detail-label">Cc:</span>
-                            <span class="detail-value">
-                                ${msg.ccRecipients.map(r => escapeHtml(r.emailAddress.address)).join('; ')}
-                            </span>
-                        </div>
-                    ` : ''}
-                    
-                    <div class="detail-row">
-                        <span class="detail-label">Date:</span>
-                        <span class="detail-value">
-                            ${new Date(msg.receivedDateTime).toLocaleString()}
-                        </span>
-                    </div>
-                    
-                    <div class="message-body">
-                        ${bodyContent}
-                    </div>
-                    
-                    ${msg.hasAttachments ? `
-                        <div class="attachments">
-                            <strong>Attachments:</strong>
-                            <div style="margin-top: 12px;">
-                                ${(msg.attachments || []).map(att => `
-                                    <div class="attachment-item" onclick="previewAttachment('${msg.id}', '${att.id}', '${escapeHtml(att.name)}', '${att.contentType}')">
-                                        📎 ${escapeHtml(att.name)} (${Math.round(att.size/1024)} KB)
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-        }
-
-        // PDF Preview Function
-        async function previewAttachment(messageId, attachmentId, fileName, contentType) {
-            if (contentType === 'application/pdf') {
-                try {
-                    const response = await fetch(
-                        `https://graph.microsoft.com/v1.0/me/messages/${messageId}/attachments/${attachmentId}/$value`,
-                        {
-                            headers: { 'Authorization': `Bearer ${accessToken}` }
-                        }
-                    );
-                    
-                    if (response.ok) {
-                        const blob = await response.blob();
-                        const url = URL.createObjectURL(blob);
-                        document.getElementById('pdfFileName').textContent = fileName;
-                        document.getElementById('pdfFrame').src = url;
-                        document.getElementById('pdfModal').classList.add('active');
-                    }
-                } catch (error) {
-                    console.error('Error loading PDF:', error);
-                }
-            } else {
-                downloadAttachment(messageId, attachmentId, fileName);
-            }
-        }
-
-        function closePDFModal() {
-            document.getElementById('pdfModal').classList.remove('active');
-            document.getElementById('pdfFrame').src = '';
-        }
-
-        // Helper to escape HTML
-        function escapeHtml(unsafe) {
-            if (!unsafe) return '';
-            return unsafe
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-        }
-
-        // Search messages
-        let searchTimeout;
-        async function searchMessages() {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(async () => {
-                const query = document.getElementById('searchInput').value.trim();
-                if (!query) {
-                    loadFolder(currentFolder);
-                    return;
-                }
-                
-                try {
-                    const response = await fetch(
-                        `https://graph.microsoft.com/v1.0/me/mailFolders/${currentFolder}/messages?$search="${query}"&$top=20`,
-                        {
-                            headers: { 'Authorization': `Bearer ${accessToken}` }
-                        }
-                    );
-                    
-                    if (response.status === 429) {
-                        const retryAfter = response.headers.get('Retry-After') || 10;
-                        updateStatus(`⏳ Rate limited. Waiting ${retryAfter}s...`, 'loading');
-                        await delay(retryAfter * 1000);
-                        return searchMessages();
-                    }
-                    
-                    if (!response.ok) {
-                        throw new Error('Search failed');
-                    }
-                    
-                    const data = await response.json();
-                    messages = data.value || [];
-                    renderMessageList();
-                    
-                } catch (error) {
-                    console.error('Search error:', error);
-                }
-            }, 500);
-        }
-
-        // Toggle unread filter
-        function toggleUnreadFilter() {
-            showOnlyUnread = !showOnlyUnread;
-            const filterBtn = document.getElementById('filterBtn');
-            filterBtn.textContent = showOnlyUnread ? '📫 Unread' : '📫 All';
-            loadFolder(currentFolder);
-        }
-
-        // Email actions
-        async function deleteMessage() {
-            if (!currentMessageId || !confirm('Delete this message?')) return;
-            
-            try {
-                const response = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${currentMessageId}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-                
-                if (!response.ok && response.status !== 204) {
-                    throw new Error('Delete failed');
-                }
-                
-                await delay(500);
-                loadFolder(currentFolder);
-                document.getElementById('messageContent').innerHTML = '<div class="loading-message">Message deleted</div>';
-                document.getElementById('messageActions').style.display = 'none';
-                
-            } catch (error) {
-                alert('Error deleting message');
-            }
-        }
-
-        async function markAsJunk() {
-            if (!currentMessageId) return;
-            
-            try {
-                const response = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${currentMessageId}/markAsJunk`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ moveToJunk: true })
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Failed to mark as junk');
-                }
-                
-                await delay(500);
-                loadFolder('inbox');
-                alert('Message moved to junk');
-                
-            } catch (error) {
-                alert('Error marking as junk');
-            }
-        }
-
-        // Compose functions
-        function openCompose() {
-            document.getElementById('composeModal').classList.add('active');
-            attachments = [];
-            updateAttachmentList();
-        }
-
-        function closeCompose() {
-            document.getElementById('composeModal').classList.remove('active');
-            clearCompose();
-        }
-
-        function clearCompose() {
-            ['to', 'cc', 'bcc', 'subject', 'body'].forEach(field => {
-                const el = document.getElementById(`compose${field.charAt(0).toUpperCase() + field.slice(1)}`);
-                if (el) el.value = '';
-            });
-            attachments = [];
-            updateAttachmentList();
-        }
-
-        function handleFileSelect(event) {
-            const files = Array.from(event.target.files);
-            files.forEach(file => {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    attachments.push({
-                        name: file.name,
-                        size: file.size,
-                        type: file.type,
-                        content: e.target.result.split(',')[1],
-                        contentType: file.type
-                    });
-                    updateAttachmentList();
-                };
-                reader.readAsDataURL(file);
-            });
-        }
-
-        function updateAttachmentList() {
-            const list = document.getElementById('attachmentList');
-            list.innerHTML = attachments.map((att, index) => `
-                <div class="attachment-preview">
-                    <span>📎 ${escapeHtml(att.name)} (${Math.round(att.size/1024)} KB)</span>
-                    <span class="remove-attachment" onclick="removeAttachment(${index})">×</span>
-                </div>
-            `).join('');
-        }
-
-        function removeAttachment(index) {
-            attachments.splice(index, 1);
-            updateAttachmentList();
-        }
-
-        async function sendEmail() {
-            const to = document.getElementById('composeTo').value.split(',').map(e => e.trim()).filter(e => e);
-            if (to.length === 0) {
-                alert('Please enter at least one recipient');
-                return;
-            }
-            
-            const cc = document.getElementById('composeCc').value.split(',').map(e => e.trim()).filter(e => e);
-            const bcc = document.getElementById('composeBcc').value.split(',').map(e => e.trim()).filter(e => e);
-            
-            const message = {
-                subject: document.getElementById('composeSubject').value || '(No subject)',
-                body: {
-                    contentType: 'HTML',
-                    content: document.getElementById('composeBody').value.replace(/\n/g, '<br>') || ''
-                },
-                toRecipients: to.map(email => ({ emailAddress: { address: email } })),
-                ccRecipients: cc.map(email => ({ emailAddress: { address: email } })),
-                bccRecipients: bcc.map(email => ({ emailAddress: { address: email } }))
-            };
-            
-            if (attachments.length > 0) {
-                message.attachments = attachments.map(att => ({
-                    '@odata.type': '#microsoft.graph.fileAttachment',
-                    name: att.name,
-                    contentType: att.contentType || 'application/octet-stream',
-                    contentBytes: att.content
-                }));
-            }
-            
-            try {
-                const response = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ message, saveToSentItems: true })
-                });
-                
-                if (response.status === 429) {
-                    const retryAfter = response.headers.get('Retry-After') || 10;
-                    alert(`Rate limited. Please wait ${retryAfter} seconds.`);
-                    return;
-                }
-                
-                if (response.ok) {
-                    alert('Email sent successfully!');
-                    closeCompose();
-                    await delay(500);
-                    if (currentFolder === 'sent') loadFolder('sent');
-                } else {
-                    const error = await response.text();
-                    alert('Error sending email: ' + error);
-                }
-                
-            } catch (error) {
-                alert('Error sending email: ' + error.message);
-            }
-        }
-
-        function saveDraft() {
-            const draft = {
-                id: 'draft_' + Date.now(),
-                to: document.getElementById('composeTo').value,
-                cc: document.getElementById('composeCc').value,
-                bcc: document.getElementById('composeBcc').value,
-                subject: document.getElementById('composeSubject').value,
-                body: document.getElementById('composeBody').value,
-                bodyPreview: (document.getElementById('composeBody').value || '').substring(0, 100),
-                attachments: [...attachments],
-                savedAt: new Date().toISOString()
-            };
-            
-            drafts.push(draft);
-            localStorage.setItem('emailDrafts', JSON.stringify(drafts));
-            
-            alert('Draft saved');
-            closeCompose();
-            
-            if (currentFolder.toLowerCase().includes('draft')) {
-                loadFolder(currentFolder);
-            }
-        }
-
-        function editDraft(draftId) {
-            const draft = drafts.find(d => d.id === draftId);
-            if (!draft) return;
-            
-            openCompose();
-            document.getElementById('composeTo').value = draft.to || '';
-            document.getElementById('composeCc').value = draft.cc || '';
-            document.getElementById('composeBcc').value = draft.bcc || '';
-            document.getElementById('composeSubject').value = draft.subject || '';
-            document.getElementById('composeBody').value = draft.body || '';
-            attachments = draft.attachments || [];
-            updateAttachmentList();
-        }
-
-        function replyToMessage() {
-            const msg = messages.find(m => m.id === currentMessageId);
-            if (!msg) return;
-            
-            openCompose();
-            document.getElementById('composeTo').value = msg.from?.emailAddress?.address || '';
-            document.getElementById('composeSubject').value = `Re: ${msg.subject || ''}`;
-        }
-
-        function replyAll() {
-            const msg = messages.find(m => m.id === currentMessageId);
-            if (!msg) return;
-            
-            openCompose();
-            const to = [msg.from?.emailAddress?.address];
-            const cc = msg.toRecipients?.map(r => r.emailAddress.address) || [];
-            
-            document.getElementById('composeTo').value = to.join(', ');
-            document.getElementById('composeCc').value = cc.join(', ');
-            document.getElementById('composeSubject').value = `Re: ${msg.subject || ''}`;
-        }
-
-        function forwardMessage() {
-            const msg = messages.find(m => m.id === currentMessageId);
-            if (!msg) return;
-            
-            openCompose();
-            document.getElementById('composeSubject').value = `Fwd: ${msg.subject || ''}`;
-            document.getElementById('composeBody').value = `\n\n-------- Forwarded Message --------\nFrom: ${msg.from?.emailAddress?.name}\nDate: ${new Date(msg.receivedDateTime).toLocaleString()}\nSubject: ${msg.subject}\n\n${msg.bodyPreview}`;
-        }
-
-        function moveToFolder() {
-            alert('Move to folder functionality coming soon!');
-        }
-
-        function downloadAttachment(messageId, attachmentId, fileName) {
-            alert('Download attachment functionality coming soon!');
-        }
-
-        // Helper functions
-        function updateStatus(text, type) {
-            const status = document.getElementById('tokenStatus');
-            status.textContent = text;
-            status.className = `token-status status-${type}`;
-        }
-
-        // Set up additional action modal change handler
-        document.getElementById('additionalActionType')?.addEventListener('change', function() {
-            const action = this.value;
-            const needsValue = ['move', 'copy', 'forward', 'forwardAttachment', 'redirect', 'categorize'].includes(action);
-            document.getElementById('additionalActionValue').style.display = needsValue ? 'block' : 'none';
-            
-            if (needsValue) {
-                document.getElementById('additionalActionInput').placeholder = 
-                    action.includes('forward') ? 'Enter email address' : 
-                    action.includes('categorize') ? 'Enter category name' : 
-                    'Enter folder name';
-            }
+      }
+      return true;
+    }
+
+    function updateStatus(text, type) {
+      const status = document.getElementById('tokenStatus');
+      status.textContent = text;
+      status.className = `token-status status-${type}`;
+    }
+
+    function escapeHtml(unsafe) {
+      if (!unsafe) return '';
+      return unsafe
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // ============================================
+    // CONNECT WITH TOKEN
+    // ============================================
+    async function connectWithToken() {
+      const tokenInput = document.getElementById('accessTokenInput').value.trim();
+
+      if (!tokenInput) {
+        updateStatus('Please enter a token', 'invalid');
+        return;
+      }
+
+      accessToken = tokenInput;
+      updateStatus('🔄 Connecting...', 'loading');
+      document.getElementById('connectBtn').disabled = true;
+
+      try {
+        const userResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
         });
 
-        // Load saved token on startup with expiry check
-        window.onload = function() {
-            const savedAccess = localStorage.getItem('accessToken');
-            
-            if (savedAccess) {
-                document.getElementById('accessTokenInput').value = savedAccess;
-                accessToken = savedAccess;
-                
-                const payload = decodeToken(savedAccess);
-                if (payload && payload.exp) {
-                    const expiryDate = new Date(payload.exp * 1000);
-                    const now = new Date();
-                    
-                    if (expiryDate > now) {
-                        setTimeout(connectWithToken, 500);
-                    } else {
-                        localStorage.removeItem('accessToken');
-                        updateStatus('🔌 Token expired - please enter new token', 'invalid');
-                    }
-                } else {
-                    setTimeout(connectWithToken, 500);
-                }
-            }
+        if (userResponse.status === 401) throw new Error('Token expired or invalid');
+        if (!userResponse.ok) throw new Error('Invalid token');
+
+        const userData = await userResponse.json();
+        userEmail = userData.mail || userData.userPrincipalName;
+
+        updateStatus(`✅ Connected as ${userEmail}`, 'valid');
+
+        localStorage.setItem('accessToken', accessToken);
+        checkTokenExpiry();
+        setInterval(checkTokenExpiry, 60000);
+
+        // reset cached inbox id each connect
+        inboxFolderIdCache = null;
+
+        await loadFolders();
+        await delay(500);
+        await loadFolder('inbox');
+
+      } catch (error) {
+        updateStatus('❌ Invalid token', 'invalid');
+        console.error(error);
+      } finally {
+        document.getElementById('connectBtn').disabled = false;
+      }
+    }
+
+    // ============================================
+    // FOLDER MANAGEMENT
+    // ============================================
+    async function loadFolders() {
+      const response = await fetch('https://graph.microsoft.com/v1.0/me/mailFolders', {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('Retry-After') || 10;
+        updateStatus(`⏳ Rate limited. Waiting ${retryAfter}s...`, 'loading');
+        await delay(retryAfter * 1000);
+        return loadFolders();
+      }
+
+      if (!response.ok) {
+        updateStatus('❌ Error loading folders', 'invalid');
+        return;
+      }
+
+      const data = await response.json();
+      folders = data.value;
+      renderFolders();
+    }
+
+    function renderFolders() {
+      const folderList = document.getElementById('folderList');
+      const defaultFolders = ['inbox', 'sent', 'drafts', 'archive', 'junk'];
+
+      folderList.innerHTML = folders
+        .filter(f => defaultFolders.includes(f.displayName.toLowerCase()))
+        .concat(folders.filter(f => !defaultFolders.includes(f.displayName.toLowerCase())))
+        .map(folder => `
+          <div class="folder-item ${folder.displayName.toLowerCase() === currentFolder ? 'active' : ''}"
+               onclick="loadFolder('${folder.id}')">
+            <span class="folder-icon">${getFolderIcon(folder.displayName)}</span>
+            <span class="folder-name">${escapeHtml(folder.displayName)}</span>
+            <span class="folder-count">${folder.totalItemCount || 0}</span>
+          </div>
+        `).join('');
+    }
+
+    function getFolderIcon(name) {
+      const icons = { 'inbox': '📥', 'sent': '📤', 'drafts': '📝', 'archive': '📦', 'junk': '⚠️', 'deleted': '🗑️' };
+      return icons[name.toLowerCase()] || '📁';
+    }
+
+    async function getFolderId(folderName) {
+      try {
+        const safeName = folderName.replace(/'/g, "''"); // simple OData escape
+        const response = await fetch(`https://graph.microsoft.com/v1.0/me/mailFolders?$filter=displayName eq '${safeName}'`, {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.value && data.value.length > 0) return data.value[0].id;
+        }
+
+        const createResponse = await fetch('https://graph.microsoft.com/v1.0/me/mailFolders', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ displayName: folderName })
+        });
+
+        if (createResponse.ok) {
+          const newFolder = await createResponse.json();
+          // refresh folders list after creating
+          await loadFolders();
+          return newFolder.id;
+        }
+      } catch (error) {
+        console.error('Error finding/creating folder:', error);
+      }
+      return null;
+    }
+
+    async function getInboxFolderId() {
+      const res = await fetch('https://graph.microsoft.com/v1.0/me/mailFolders/inbox', {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+      if (!res.ok) throw new Error('Failed to get Inbox folder');
+      const inbox = await res.json();
+      return inbox.id;
+    }
+
+    async function getInboxIdCached() {
+      if (inboxFolderIdCache) return inboxFolderIdCache;
+      inboxFolderIdCache = await getInboxFolderId();
+      return inboxFolderIdCache;
+    }
+
+    // ============================================
+    // MESSAGE MANAGEMENT
+    // ============================================
+    async function loadFolder(folderId) {
+      currentFolder = folderId;
+      renderFolders();
+
+      updateStatus(`🔄 Loading ${getFolderName(folderId)}...`, 'loading');
+
+      try {
+        let url = `https://graph.microsoft.com/v1.0/me/mailFolders/${folderId}/messages?$top=20&$orderby=receivedDateTime DESC&$expand=attachments`;
+
+        if (showOnlyUnread) url += '&$filter=isRead eq false';
+
+        const response = await fetch(url, {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+
+        if (response.status === 429) {
+          const retryAfter = response.headers.get('Retry-After') || 10;
+          updateStatus(`⏳ Rate limited. Waiting ${retryAfter}s...`, 'loading');
+          await delay(retryAfter * 1000);
+          return loadFolder(folderId);
+        }
+
+        if (!response.ok) throw new Error('Failed to load messages');
+
+        const data = await response.json();
+        messages = data.value || [];
+
+        if (folderId.toLowerCase().includes('draft')) {
+          drafts.forEach(draft => {
+            messages.unshift({
+              id: draft.id,
+              subject: draft.subject || '(No subject)',
+              from: { emailAddress: { name: 'Draft' } },
+              isRead: true,
+              bodyPreview: draft.bodyPreview || '',
+              isDraft: true,
+              receivedDateTime: draft.savedAt
+            });
+          });
+        }
+
+        renderMessageList();
+        updateStatus(`✅ Connected as ${userEmail}`, 'valid');
+
+        await delay(500);
+        loadFolders();
+
+      } catch (error) {
+        updateStatus('❌ Error loading messages', 'invalid');
+        console.error(error);
+      }
+    }
+
+    function getFolderName(folderId) {
+      const folder = folders.find(f => f.id === folderId);
+      return folder ? folder.displayName : 'folder';
+    }
+
+    function renderMessageList() {
+      const messageList = document.getElementById('messageList');
+
+      if (!messages.length) {
+        messageList.innerHTML = '<div class="loading-message">📭 No messages in this folder</div>';
+        return;
+      }
+
+      messageList.innerHTML = messages.map(msg => `
+        <div class="message-item ${msg.isRead ? '' : 'unread'} ${msg.id === currentMessageId ? 'selected' : ''}"
+             onclick="loadMessage('${msg.id}')">
+          <div class="message-sender">
+            <span>${escapeHtml(msg.from?.emailAddress?.name || 'Unknown')} ${msg.isDraft ? '<span class="draft-badge">Draft</span>' : ''}</span>
+            <span class="message-date">${formatDate(msg.receivedDateTime)}</span>
+          </div>
+          <div class="message-subject">
+            ${escapeHtml(msg.subject || '(No subject)')}
+            ${msg.hasAttachments ? '<span class="attachment-indicator">📎</span>' : ''}
+          </div>
+          <div class="message-preview">${escapeHtml(msg.bodyPreview || '')}</div>
+        </div>
+      `).join('');
+    }
+
+    function formatDate(dateString) {
+      const date = new Date(dateString);
+      const now = new Date();
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      if (date.toDateString() === now.toDateString()) {
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      } else if (date.toDateString() === yesterday.toDateString()) {
+        return 'Yesterday';
+      } else {
+        return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      }
+    }
+
+    // ============================================
+    // SINGLE MESSAGE LOADING
+    // ============================================
+    async function loadMessage(messageId) {
+      const draft = drafts.find(d => d.id === messageId);
+      if (draft) {
+        currentMessageId = messageId;
+        renderDraftContent(draft);
+        return;
+      }
+
+      currentMessageId = messageId;
+
+      try {
+        const response = await fetch(
+          `https://graph.microsoft.com/v1.0/me/messages/${messageId}?$expand=attachments`,
+          { headers: { 'Authorization': `Bearer ${accessToken}` } }
+        );
+
+        if (response.status === 429) {
+          const retryAfter = response.headers.get('Retry-After') || 10;
+          updateStatus(`⏳ Rate limited. Waiting ${retryAfter}s...`, 'loading');
+          await delay(retryAfter * 1000);
+          return loadMessage(messageId);
+        }
+
+        if (!response.ok) throw new Error('Failed to load message');
+
+        const msg = await response.json();
+
+        if (!msg.isRead) {
+          await delay(300);
+          await fetch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
+            method: 'PATCH',
+            headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ isRead: true })
+          });
+
+          const index = messages.findIndex(m => m.id === messageId);
+          if (index !== -1) messages[index].isRead = true;
+        }
+
+        renderMessageList();
+        renderMessageContent(msg);
+
+      } catch (error) {
+        console.error('Error loading message:', error);
+      }
+    }
+
+    function renderDraftContent(draft) {
+      const actions = document.getElementById('messageActions');
+      actions.style.display = 'flex';
+
+      const content = document.getElementById('messageContent');
+      content.innerHTML = `
+        <div class="message-details">
+          <h2>${escapeHtml(draft.subject || '(No subject)')} <span class="draft-badge">DRAFT</span></h2>
+
+          <div class="detail-row">
+            <span class="detail-label">To:</span>
+            <span class="detail-value">${escapeHtml(draft.to || '')}</span>
+          </div>
+
+          ${draft.cc ? `
+            <div class="detail-row">
+              <span class="detail-label">Cc:</span>
+              <span class="detail-value">${escapeHtml(draft.cc)}</span>
+            </div>
+          ` : ''}
+
+          ${draft.bcc ? `
+            <div class="detail-row">
+              <span class="detail-label">Bcc:</span>
+              <span class="detail-value">${escapeHtml(draft.bcc)}</span>
+            </div>
+          ` : ''}
+
+          <div class="detail-row">
+            <span class="detail-label">Saved:</span>
+            <span class="detail-value">${new Date(draft.savedAt).toLocaleString()}</span>
+          </div>
+
+          <div class="message-body">
+            <iframe srcdoc="${escapeHtml(draft.body || '').replace(/"/g, '&quot;')}"
+              style="width:100%; min-height:300px; border:none;"
+              sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+              referrerpolicy="no-referrer"></iframe>
+          </div>
+
+          ${draft.attachments && draft.attachments.length ? `
+            <div class="attachments">
+              <strong>Attachments:</strong>
+              <div style="margin-top: 12px;">
+                ${draft.attachments.map(att => `
+                  <div class="attachment-item">
+                    📎 ${escapeHtml(att.name)} (${Math.round(att.size/1024)} KB)
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          <div style="margin-top: 20px;">
+            <button class="btn btn-primary" onclick="editDraft('${draft.id}')">Edit Draft</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderMessageContent(msg) {
+      const actions = document.getElementById('messageActions');
+      actions.style.display = 'flex';
+
+      const content = document.getElementById('messageContent');
+
+      let bodyContent = '';
+      if (msg.body?.contentType === 'html') {
+        bodyContent = `<iframe srcdoc="${escapeHtml(msg.body.content).replace(/"/g, '&quot;')}"
+          style="width:100%; min-height:500px; border:none;"
+          sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+          referrerpolicy="no-referrer"></iframe>`;
+      } else {
+        bodyContent = `<pre style="white-space: pre-wrap; word-wrap: break-word; font-family: inherit;">${escapeHtml(msg.body?.content || '')}</pre>`;
+      }
+
+      content.innerHTML = `
+        <div class="message-details">
+          <h2>${escapeHtml(msg.subject || '(No subject)')}</h2>
+
+          <div class="detail-row">
+            <span class="detail-label">From:</span>
+            <span class="detail-value">
+              <strong>${escapeHtml(msg.from?.emailAddress?.name || 'Unknown')}</strong>
+              &lt;${escapeHtml(msg.from?.emailAddress?.address || '')}&gt;
+            </span>
+          </div>
+
+          <div class="detail-row">
+            <span class="detail-label">To:</span>
+            <span class="detail-value">
+              ${(msg.toRecipients || []).map(r => escapeHtml(r.emailAddress.address)).join('; ') || ''}
+            </span>
+          </div>
+
+          ${msg.ccRecipients?.length ? `
+            <div class="detail-row">
+              <span class="detail-label">Cc:</span>
+              <span class="detail-value">
+                ${msg.ccRecipients.map(r => escapeHtml(r.emailAddress.address)).join('; ')}
+              </span>
+            </div>
+          ` : ''}
+
+          <div class="detail-row">
+            <span class="detail-label">Date:</span>
+            <span class="detail-value">${new Date(msg.receivedDateTime).toLocaleString()}</span>
+          </div>
+
+          <div class="message-body">${bodyContent}</div>
+
+          ${msg.hasAttachments ? `
+            <div class="attachments">
+              <strong>Attachments:</strong>
+              <div style="margin-top: 12px;">
+                ${(msg.attachments || []).map(att => `
+                  <div class="attachment-item"
+                    onclick="previewAttachment('${msg.id}', '${att.id}', '${escapeHtml(att.name)}', '${att.contentType}')">
+                    📎 ${escapeHtml(att.name)} (${Math.round(att.size/1024)} KB)
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    // ============================================
+    // SEARCH AND FILTER
+    // ============================================
+    let searchTimeout;
+    async function searchMessages() {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(async () => {
+        const query = document.getElementById('searchInput').value.trim();
+        if (!query) {
+          loadFolder(currentFolder);
+          return;
+        }
+
+        try {
+          const response = await fetch(
+            `https://graph.microsoft.com/v1.0/me/mailFolders/${currentFolder}/messages?$search="${query}"&$top=20`,
+            { headers: { 'Authorization': `Bearer ${accessToken}` } }
+          );
+
+          if (response.status === 429) {
+            const retryAfter = response.headers.get('Retry-After') || 10;
+            updateStatus(`⏳ Rate limited. Waiting ${retryAfter}s...`, 'loading');
+            await delay(retryAfter * 1000);
+            return searchMessages();
+          }
+
+          if (!response.ok) throw new Error('Search failed');
+
+          const data = await response.json();
+          messages = data.value || [];
+          renderMessageList();
+
+        } catch (error) {
+          console.error('Search error:', error);
+        }
+      }, 500);
+    }
+
+    function toggleUnreadFilter() {
+      showOnlyUnread = !showOnlyUnread;
+      const filterBtn = document.getElementById('filterBtn');
+      filterBtn.textContent = showOnlyUnread ? '📫 Unread' : '📫 All';
+      loadFolder(currentFolder);
+    }
+
+    // ============================================
+    // EMAIL ACTIONS
+    // ============================================
+    async function deleteMessage() {
+      if (!currentMessageId || !confirm('Delete this message?')) return;
+
+      try {
+        const response = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${currentMessageId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+
+        if (!response.ok && response.status !== 204) throw new Error('Delete failed');
+
+        await delay(500);
+        loadFolder(currentFolder);
+        document.getElementById('messageContent').innerHTML = '<div class="loading-message">Message deleted</div>';
+        document.getElementById('messageActions').style.display = 'none';
+
+      } catch (error) {
+        alert('Error deleting message');
+      }
+    }
+
+    async function markAsJunk() {
+      if (!currentMessageId) return;
+
+      try {
+        const response = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${currentMessageId}/markAsJunk`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ moveToJunk: true })
+        });
+
+        if (!response.ok) throw new Error('Failed to mark as junk');
+
+        await delay(500);
+        loadFolder('inbox');
+        alert('Message moved to junk');
+
+      } catch (error) {
+        alert('Error marking as junk');
+      }
+    }
+
+    // ============================================
+    // RULE MANAGEMENT - REAL SERVER-SIDE RULES
+    // ============================================
+
+    async function openRulesModal() {
+      document.getElementById('rulesModal').classList.add('active');
+
+      if (!accessToken) {
+        document.getElementById('rulesList').innerHTML =
+          '<div class="loading-message">Connect first to load real Outlook rules.</div>';
+        return;
+      }
+
+      await renderServerRulesList();
+    }
+
+    function closeRulesModal() {
+      document.getElementById('rulesModal').classList.remove('active');
+      resetRuleForm();
+    }
+
+    function handleConditionChange() {
+      const condition = document.getElementById('conditionType').value;
+      selectedCondition = condition;
+
+      const needsValue = ['from', 'to', 'subject', 'body', 'senderAddress', 'recipientAddress', 'header', 'myName', 'importance'].includes(condition);
+      document.getElementById('conditionValue').style.display = needsValue ? 'block' : 'none';
+    }
+
+    function handleActionChange() {
+      const action = document.getElementById('actionType').value;
+      selectedAction = action;
+
+      const needsValue = ['move', 'copy', 'forward', 'forwardAttachment', 'redirect', 'categorize', 'importance'].includes(action);
+      document.getElementById('actionValue').style.display = needsValue ? 'block' : 'none';
+
+      if (needsValue) {
+        document.getElementById('actionInput').placeholder =
+          action.includes('forward') ? 'Enter email address' :
+          action.includes('categorize') ? 'Enter category name' :
+          action === 'importance' ? 'Enter low, normal, or high' :
+          'Enter folder name';
+      }
+    }
+
+    function showAdditionalActionForm() {
+      document.getElementById('additionalActionModal').classList.add('active');
+      document.getElementById('additionalActionType').value = '';
+      document.getElementById('additionalActionInput').value = '';
+      document.getElementById('additionalActionValue').style.display = 'none';
+    }
+
+    function closeAdditionalActionModal() { document.getElementById('additionalActionModal').classList.remove('active'); }
+
+    function addAdditionalAction() {
+      const actionType = document.getElementById('additionalActionType').value;
+      const actionValue = document.getElementById('additionalActionInput').value;
+
+      if (!actionType) { alert('Please select an action'); return; }
+
+      additionalActions.push({ type: actionType, value: actionValue });
+      renderAdditionalActions();
+      closeAdditionalActionModal();
+    }
+
+    function renderAdditionalActions() {
+      const container = document.getElementById('additionalActions');
+      container.innerHTML = '';
+      additionalActions.forEach((action, index) => {
+        const actionDiv = document.createElement('div');
+        actionDiv.className = 'action-group additional-actions';
+        actionDiv.innerHTML = `
+          <div class="action-header">
+            <span>Additional Action ${index + 1}</span>
+            <button class="btn" onclick="removeAdditionalAction(${index})" style="padding: 2px 8px;">×</button>
+          </div>
+          <div class="action-detail">
+            <span style="font-weight:600;">${escapeHtml(action.type)}:</span> ${escapeHtml(action.value || '(no value)')}
+          </div>
+        `;
+        container.appendChild(actionDiv);
+      });
+    }
+
+    function removeAdditionalAction(index) {
+      additionalActions.splice(index, 1);
+      renderAdditionalActions();
+    }
+
+    // -------- Server rules API helpers --------
+
+    async function fetchServerRules() {
+      const inboxId = await getInboxIdCached();
+      const res = await fetch(`https://graph.microsoft.com/v1.0/me/mailFolders/${inboxId}/messageRules?$orderby=sequence`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error('Failed to load server rules: ' + err);
+      }
+      const data = await res.json();
+      return data.value || [];
+    }
+
+    async function renderServerRulesList() {
+      const rulesList = document.getElementById('rulesList');
+      rulesList.innerHTML = '<div class="loading-message">Loading real Outlook rules...</div>';
+
+      try {
+        const serverRules = await fetchServerRules();
+        if (!serverRules.length) {
+          rulesList.innerHTML = '<div class="loading-message">No server rules found</div>';
+          return;
+        }
+
+        rulesList.innerHTML = serverRules.map(r => `
+          <div class="rule-card">
+            <div class="rule-info">
+              <h4>${escapeHtml(r.displayName || '(No name)')}</h4>
+              <p>Sequence: ${r.sequence ?? ''}</p>
+              <p>Enabled: ${r.isEnabled ? 'Yes' : 'No'}</p>
+              <p>Stop processing: ${r.actions?.stopProcessingRules ? 'Yes' : 'No'}</p>
+            </div>
+            <div class="rule-status">
+              <span class="status-badge ${r.isEnabled ? 'status-enabled' : 'status-disabled'}">
+                ${r.isEnabled ? 'Enabled' : 'Disabled'}
+              </span>
+              <div class="rule-actions">
+                <button class="action-btn" onclick="toggleServerRule('${r.id}', ${r.isEnabled ? 'true' : 'false'})">
+                  ${r.isEnabled ? 'Disable' : 'Enable'}
+                </button>
+                <button class="action-btn" onclick="deleteServerRule('${r.id}')">Delete</button>
+              </div>
+            </div>
+          </div>
+        `).join('');
+
+      } catch (e) {
+        rulesList.innerHTML = `<div class="loading-message">❌ ${escapeHtml(e.message)}</div>`;
+        console.error(e);
+      }
+    }
+
+    async function toggleServerRule(ruleId, currentlyEnabled) {
+      try {
+        const inboxId = await getInboxIdCached();
+
+        const res = await fetch(`https://graph.microsoft.com/v1.0/me/mailFolders/${inboxId}/messageRules/${ruleId}`, {
+          method: 'PATCH',
+          headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isEnabled: !currentlyEnabled })
+        });
+
+        if (!res.ok) {
+          const err = await res.text();
+          throw new Error('Toggle rule failed: ' + err);
+        }
+
+        await renderServerRulesList();
+      } catch (e) {
+        alert('❌ ' + e.message);
+        console.error(e);
+      }
+    }
+
+    async function deleteServerRule(ruleId) {
+      if (!confirm('Delete this rule from Outlook (server)?')) return;
+
+      try {
+        const inboxId = await getInboxIdCached();
+
+        const res = await fetch(`https://graph.microsoft.com/v1.0/me/mailFolders/${inboxId}/messageRules/${ruleId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+
+        if (!res.ok && res.status !== 204) {
+          const err = await res.text();
+          throw new Error('Delete rule failed: ' + err);
+        }
+
+        await renderServerRulesList();
+      } catch (e) {
+        alert('❌ ' + e.message);
+        console.error(e);
+      }
+    }
+
+    // -------- Create server-side rule (UPDATED payload) --------
+    async function createServerSideRule(rule) {
+      const inboxId = await getInboxIdCached();
+
+      // Conditions
+      const conditions = {};
+      const cv = (rule.condition.value || '').trim();
+
+      switch (rule.condition.type) {
+        case 'from':
+          conditions.senderContains = [cv];
+          break;
+        case 'to':
+          conditions.recipientContains = [cv];
+          break;
+        case 'subject':
+          conditions.subjectContains = [cv];
+          break;
+        case 'body':
+          conditions.bodyContains = [cv];
+          break;
+        case 'hasAttachment':
+          conditions.hasAttachments = true;
+          break;
+        case 'importance':
+          conditions.importance = (cv || 'normal').toLowerCase() === 'high' ? 'high' : 'normal';
+          break;
+        default:
+          throw new Error(`Condition not supported for server rule: ${rule.condition.type}`);
+      }
+
+      // Exceptions
+      const exceptions = {};
+      if (rule.exception?.type) {
+        const ev = (rule.exception.value || '').trim();
+        switch (rule.exception.type) {
+          case 'from':
+            exceptions.senderContains = [ev];
+            break;
+          case 'to':
+            exceptions.recipientContains = [ev];
+            break;
+          case 'subject':
+            exceptions.subjectContains = [ev];
+            break;
+          case 'hasAttachment':
+            exceptions.hasAttachments = true;
+            break;
+          default:
+            console.warn('Unsupported exception:', rule.exception.type);
+        }
+      }
+
+      // Actions
+      const actions = {};
+      for (const a of rule.actions) {
+        const v = (a.value || '').trim();
+
+        switch (a.type) {
+          case 'move': {
+            const folderId = await getFolderId(v);
+            if (!folderId) throw new Error(`Cannot find/create folder: ${v}`);
+            actions.moveToFolder = folderId;
+            break;
+          }
+          case 'copy': {
+            const folderId = await getFolderId(v);
+            if (!folderId) throw new Error(`Cannot find/create folder: ${v}`);
+            actions.copyToFolder = folderId;
+            break;
+          }
+          case 'delete':
+            actions.delete = true;
+            break;
+          case 'markRead':
+            actions.markAsRead = true;
+            break;
+          case 'markJunk': {
+            const junkFolder = folders.find(f => f.displayName.toLowerCase() === 'junk');
+            if (junkFolder) actions.moveToFolder = junkFolder.id;
+            break;
+          }
+          case 'forward': {
+            if (!v) throw new Error('Forward requires an email address');
+            actions.forwardTo = v.split(',').map(email => ({ emailAddress: { address: email.trim() } }));
+            break;
+          }
+          case 'redirect': {
+            if (!v) throw new Error('Redirect requires an email address');
+            actions.redirectTo = v.split(',').map(email => ({ emailAddress: { address: email.trim() } }));
+            break;
+          }
+          case 'importance': {
+            const level = (v || 'normal').toLowerCase();
+            actions.markImportance = (level === 'high' || level === 'low') ? level : 'normal';
+            break;
+          }
+          default:
+            console.warn('Unsupported server action:', a.type);
+        }
+      }
+
+      // IMPORTANT: stopProcessingRules belongs inside actions
+      actions.stopProcessingRules = !!rule.stopProcessing;
+
+      // Sequence: append after existing
+      const existing = await fetchServerRules();
+      const nextSeq = existing.length ? Math.max(...existing.map(r => r.sequence || 0)) + 1 : 1;
+
+      const payload = {
+        displayName: rule.name,
+        sequence: nextSeq,
+        isEnabled: true,
+        conditions,
+        actions
+      };
+
+      if (Object.keys(exceptions).length) payload.exceptions = exceptions;
+
+      console.log('Creating rule with payload:', payload);
+
+      const res = await fetch(`https://graph.microsoft.com/v1.0/me/mailFolders/${inboxId}/messageRules`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error('Create rule failed: ' + err);
+      }
+
+      return await res.json();
+    }
+
+    async function saveRule() {
+      const ruleName = document.getElementById('ruleName').value.trim();
+      if (!ruleName) { alert('Please enter a rule name'); return; }
+
+      if (!selectedCondition) { alert('Please select a condition'); return; }
+      if (!selectedAction) { alert('Please select an action'); return; }
+
+      const conditionValue = document.getElementById('conditionInput').value;
+      const actionValue = document.getElementById('actionInput').value;
+      const exceptionCondition = document.getElementById('exceptionCondition').value;
+      const exceptionValue = document.getElementById('exceptionValue').value;
+      const stopProcessing = document.getElementById('stopProcessing').checked;
+
+      const rule = {
+        name: ruleName,
+        condition: { type: selectedCondition, value: conditionValue },
+        actions: [{ type: selectedAction, value: actionValue }, ...additionalActions],
+        exception: exceptionCondition ? { type: exceptionCondition, value: exceptionValue } : null,
+        stopProcessing
+      };
+
+      try {
+        await createServerSideRule(rule);
+        resetRuleForm();
+        alert('✅ Rule saved to Outlook (server-side).');
+        await renderServerRulesList();
+      } catch (e) {
+        alert('❌ ' + e.message);
+        console.error(e);
+      }
+    }
+
+    function resetRuleForm() {
+      document.getElementById('ruleName').value = '';
+      document.getElementById('conditionType').value = '';
+      document.getElementById('conditionInput').value = '';
+      document.getElementById('actionType').value = '';
+      document.getElementById('actionInput').value = '';
+      document.getElementById('exceptionCondition').value = '';
+      document.getElementById('exceptionValue').value = '';
+      document.getElementById('conditionValue').style.display = 'none';
+      document.getElementById('actionValue').style.display = 'none';
+      selectedCondition = '';
+      selectedAction = '';
+      additionalActions = [];
+      document.getElementById('additionalActions').innerHTML = '';
+    }
+
+    // ============================================
+    // VIEW SWITCHING (FIX: pass event explicitly)
+    // ============================================
+    function switchView(view, evt) {
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+      if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+
+      document.getElementById('mailView').style.display = view === 'mail' ? 'flex' : 'none';
+      if (view === 'rules') openRulesModal();
+    }
+
+    // ============================================
+    // PDF PREVIEW
+    // ============================================
+    async function previewAttachment(messageId, attachmentId, fileName, contentType) {
+      if (contentType === 'application/pdf') {
+        try {
+          const response = await fetch(
+            `https://graph.microsoft.com/v1.0/me/messages/${messageId}/attachments/${attachmentId}/$value`,
+            { headers: { 'Authorization': `Bearer ${accessToken}` } }
+          );
+
+          if (response.ok) {
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            document.getElementById('pdfFileName').textContent = fileName;
+            document.getElementById('pdfFrame').src = url;
+            document.getElementById('pdfModal').classList.add('active');
+          }
+        } catch (error) {
+          console.error('Error loading PDF:', error);
+        }
+      } else {
+        downloadAttachment(messageId, attachmentId, fileName);
+      }
+    }
+
+    function closePDFModal() {
+      document.getElementById('pdfModal').classList.remove('active');
+      document.getElementById('pdfFrame').src = '';
+    }
+
+    function downloadAttachment(messageId, attachmentId, fileName) {
+      alert('Download attachment functionality coming soon!');
+    }
+
+    // ============================================
+    // COMPOSE FUNCTIONS
+    // ============================================
+    function openCompose() {
+      document.getElementById('composeModal').classList.add('active');
+      attachments = [];
+      updateAttachmentList();
+    }
+
+    function closeCompose() {
+      document.getElementById('composeModal').classList.remove('active');
+      clearCompose();
+    }
+
+    function clearCompose() {
+      ['to', 'cc', 'bcc', 'subject', 'body'].forEach(field => {
+        const el = document.getElementById(`compose${field.charAt(0).toUpperCase() + field.slice(1)}`);
+        if (el) el.value = '';
+      });
+      attachments = [];
+      updateAttachmentList();
+    }
+
+    function handleFileSelect(event) {
+      const files = Array.from(event.target.files);
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          attachments.push({
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            content: e.target.result.split(',')[1],
+            contentType: file.type
+          });
+          updateAttachmentList();
         };
-    </script>
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function updateAttachmentList() {
+      const list = document.getElementById('attachmentList');
+      list.innerHTML = attachments.map((att, index) => `
+        <div class="attachment-preview">
+          <span>📎 ${escapeHtml(att.name)} (${Math.round(att.size/1024)} KB)</span>
+          <span class="remove-attachment" onclick="removeAttachment(${index})">×</span>
+        </div>
+      `).join('');
+    }
+
+    function removeAttachment(index) {
+      attachments.splice(index, 1);
+      updateAttachmentList();
+    }
+
+    async function sendEmail() {
+      const to = document.getElementById('composeTo').value.split(',').map(e => e.trim()).filter(e => e);
+      if (to.length === 0) { alert('Please enter at least one recipient'); return; }
+
+      const cc = document.getElementById('composeCc').value.split(',').map(e => e.trim()).filter(e => e);
+      const bcc = document.getElementById('composeBcc').value.split(',').map(e => e.trim()).filter(e => e);
+
+      const message = {
+        subject: document.getElementById('composeSubject').value || '(No subject)',
+        body: {
+          contentType: 'HTML',
+          content: document.getElementById('composeBody').value.replace(/\n/g, '<br>') || ''
+        },
+        toRecipients: to.map(email => ({ emailAddress: { address: email } })),
+        ccRecipients: cc.map(email => ({ emailAddress: { address: email } })),
+        bccRecipients: bcc.map(email => ({ emailAddress: { address: email } }))
+      };
+
+      if (attachments.length > 0) {
+        message.attachments = attachments.map(att => ({
+          '@odata.type': '#microsoft.graph.fileAttachment',
+          name: att.name,
+          contentType: att.contentType || 'application/octet-stream',
+          contentBytes: att.content
+        }));
+      }
+
+      try {
+        const response = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message, saveToSentItems: true })
+        });
+
+        if (response.status === 429) {
+          const retryAfter = response.headers.get('Retry-After') || 10;
+          alert(`Rate limited. Please wait ${retryAfter} seconds.`);
+          return;
+        }
+
+        if (response.ok) {
+          alert('Email sent successfully!');
+          closeCompose();
+          await delay(500);
+          if (currentFolder === 'sent') loadFolder('sent');
+        } else {
+          const error = await response.text();
+          alert('Error sending email: ' + error);
+        }
+
+      } catch (error) {
+        alert('Error sending email: ' + error.message);
+      }
+    }
+
+    function saveDraft() {
+      const draft = {
+        id: 'draft_' + Date.now(),
+        to: document.getElementById('composeTo').value,
+        cc: document.getElementById('composeCc').value,
+        bcc: document.getElementById('composeBcc').value,
+        subject: document.getElementById('composeSubject').value,
+        body: document.getElementById('composeBody').value,
+        bodyPreview: (document.getElementById('composeBody').value || '').substring(0, 100),
+        attachments: [...attachments],
+        savedAt: new Date().toISOString()
+      };
+
+      drafts.push(draft);
+      localStorage.setItem('emailDrafts', JSON.stringify(drafts));
+
+      alert('Draft saved');
+      closeCompose();
+
+      if (String(currentFolder).toLowerCase().includes('draft')) loadFolder(currentFolder);
+    }
+
+    function editDraft(draftId) {
+      const draft = drafts.find(d => d.id === draftId);
+      if (!draft) return;
+
+      openCompose();
+      document.getElementById('composeTo').value = draft.to || '';
+      document.getElementById('composeCc').value = draft.cc || '';
+      document.getElementById('composeBcc').value = draft.bcc || '';
+      document.getElementById('composeSubject').value = draft.subject || '';
+      document.getElementById('composeBody').value = draft.body || '';
+      attachments = draft.attachments || [];
+      updateAttachmentList();
+    }
+
+    function replyToMessage() {
+      const msg = messages.find(m => m.id === currentMessageId);
+      if (!msg) return;
+
+      openCompose();
+      document.getElementById('composeTo').value = msg.from?.emailAddress?.address || '';
+      document.getElementById('composeSubject').value = `Re: ${msg.subject || ''}`;
+    }
+
+    function replyAll() {
+      const msg = messages.find(m => m.id === currentMessageId);
+      if (!msg) return;
+
+      openCompose();
+      const to = [msg.from?.emailAddress?.address];
+      const cc = msg.toRecipients?.map(r => r.emailAddress.address) || [];
+
+      document.getElementById('composeTo').value = to.join(', ');
+      document.getElementById('composeCc').value = cc.join(', ');
+      document.getElementById('composeSubject').value = `Re: ${msg.subject || ''}`;
+    }
+
+    function forwardMessage() {
+      const msg = messages.find(m => m.id === currentMessageId);
+      if (!msg) return;
+
+      openCompose();
+      document.getElementById('composeSubject').value = `Fwd: ${msg.subject || ''}`;
+      document.getElementById('composeBody').value =
+        `\n\n-------- Forwarded Message --------\nFrom: ${msg.from?.emailAddress?.name}\nDate: ${new Date(msg.receivedDateTime).toLocaleString()}\nSubject: ${msg.subject}\n\n${msg.bodyPreview}`;
+    }
+
+    function moveToFolder() { alert('Move to folder functionality coming soon!'); }
+
+    // Set up additional action modal change handler
+    document.getElementById('additionalActionType')?.addEventListener('change', function() {
+      const action = this.value;
+      const needsValue = ['move', 'copy', 'forward', 'forwardAttachment', 'redirect', 'categorize', 'importance'].includes(action);
+      document.getElementById('additionalActionValue').style.display = needsValue ? 'block' : 'none';
+
+      if (needsValue) {
+        document.getElementById('additionalActionInput').placeholder =
+          action.includes('forward') ? 'Enter email address' :
+          action.includes('categorize') ? 'Enter category name' :
+          action === 'importance' ? 'Enter low, normal, or high' :
+          'Enter folder name';
+      }
+    });
+
+    // Load saved token on startup
+    window.onload = function() {
+      const savedAccess = localStorage.getItem('accessToken');
+
+      if (savedAccess) {
+        document.getElementById('accessTokenInput').value = savedAccess;
+        accessToken = savedAccess;
+
+        const payload = decodeToken(savedAccess);
+        if (payload && payload.exp) {
+          const expiryDate = new Date(payload.exp * 1000);
+          const now = new Date();
+
+          if (expiryDate > now) {
+            setTimeout(connectWithToken, 500);
+          } else {
+            localStorage.removeItem('accessToken');
+            updateStatus('🔌 Token expired - please enter new token', 'invalid');
+          }
+        } else {
+          setTimeout(connectWithToken, 500);
+        }
+      }
+    };
+  </script>
 </body>
 </html>
