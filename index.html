@@ -431,6 +431,58 @@
             background: #edebe9;
         }
 
+        /* PDF Preview Modal */
+        .pdf-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 3000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .pdf-modal.active {
+            display: flex;
+        }
+
+        .pdf-modal-content {
+            background: white;
+            width: 90%;
+            height: 90%;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .pdf-header {
+            padding: 12px 20px;
+            border-bottom: 1px solid #edebe9;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .pdf-header h3 {
+            font-size: 16px;
+            color: #201f1e;
+        }
+
+        .pdf-body {
+            flex: 1;
+            overflow: auto;
+            padding: 20px;
+        }
+
+        .pdf-body iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
         /* Compose Modal - Enhanced for Attachments */
         .modal {
             display: none;
@@ -877,6 +929,8 @@
             background: white;
         }
     </style>
+    <!-- PDF.js for PDF preview -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -1159,6 +1213,19 @@
         </div>
     </div>
 
+    <!-- PDF Preview Modal -->
+    <div class="pdf-modal" id="pdfModal">
+        <div class="pdf-modal-content">
+            <div class="pdf-header">
+                <h3>PDF Preview - <span id="pdfFileName"></span></h3>
+                <button class="close-btn" onclick="closePDFModal()">×</button>
+            </div>
+            <div class="pdf-body" id="pdfBody">
+                <iframe id="pdfFrame" src=""></iframe>
+            </div>
+        </div>
+    </div>
+
     <script>
         // State management
         let accessToken = '';
@@ -1374,12 +1441,47 @@
         }
 
         // ============================================
-        // Apply rules to messages (real email functionality)
+        // FIXED: Apply rules to messages (NOW WORKS WITH MICROSOFT GRAPH)
         // ============================================
+        async function getFolderId(folderName) {
+            try {
+                // Search for folder by name
+                const response = await fetch(`https://graph.microsoft.com/v1.0/me/mailFolders?$filter=displayName eq '${folderName}'`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.value && data.value.length > 0) {
+                        return data.value[0].id;
+                    }
+                }
+                
+                // If folder doesn't exist, create it
+                const createResponse = await fetch('https://graph.microsoft.com/v1.0/me/mailFolders', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        displayName: folderName
+                    })
+                });
+                
+                if (createResponse.ok) {
+                    const newFolder = await createResponse.json();
+                    return newFolder.id;
+                }
+            } catch (error) {
+                console.error('Error finding/creating folder:', error);
+            }
+            return null;
+        }
+
         async function applyRulesToMessage(message) {
             if (!rules || rules.length === 0) return message;
             
-            // Get enabled rules
             const enabledRules = rules.filter(r => r.enabled);
             
             for (const rule of enabledRules) {
@@ -1388,16 +1490,16 @@
                 // Check condition
                 switch(rule.condition.type) {
                     case 'from':
-                        conditionMet = message.from?.emailAddress?.address?.toLowerCase().includes(rule.condition.value?.toLowerCase() || '');
+                        conditionMet = message.from?.emailAddress?.address?.toLowerCase().includes((rule.condition.value || '').toLowerCase());
                         break;
                     case 'to':
-                        conditionMet = message.toRecipients?.some(r => r.emailAddress.address.toLowerCase().includes(rule.condition.value?.toLowerCase() || ''));
+                        conditionMet = message.toRecipients?.some(r => r.emailAddress.address.toLowerCase().includes((rule.condition.value || '').toLowerCase()));
                         break;
                     case 'subject':
-                        conditionMet = message.subject?.toLowerCase().includes(rule.condition.value?.toLowerCase() || '');
+                        conditionMet = (message.subject || '').toLowerCase().includes((rule.condition.value || '').toLowerCase());
                         break;
                     case 'body':
-                        conditionMet = message.bodyPreview?.toLowerCase().includes(rule.condition.value?.toLowerCase() || '');
+                        conditionMet = (message.bodyPreview || '').toLowerCase().includes((rule.condition.value || '').toLowerCase());
                         break;
                     case 'hasAttachment':
                         conditionMet = message.hasAttachments;
@@ -1410,12 +1512,12 @@
                 if (rule.exception && conditionMet) {
                     switch(rule.exception.type) {
                         case 'from':
-                            if (message.from?.emailAddress?.address?.toLowerCase().includes(rule.exception.value?.toLowerCase() || '')) {
+                            if (message.from?.emailAddress?.address?.toLowerCase().includes((rule.exception.value || '').toLowerCase())) {
                                 conditionMet = false;
                             }
                             break;
                         case 'subject':
-                            if (message.subject?.toLowerCase().includes(rule.exception.value?.toLowerCase() || '')) {
+                            if ((message.subject || '').toLowerCase().includes((rule.exception.value || '').toLowerCase())) {
                                 conditionMet = false;
                             }
                             break;
@@ -1427,6 +1529,46 @@
                     for (const action of rule.actions) {
                         try {
                             switch(action.type) {
+                                case 'move':
+                                    if (action.value) {
+                                        const folderId = await getFolderId(action.value);
+                                        if (folderId) {
+                                            await fetch(`https://graph.microsoft.com/v1.0/me/messages/${message.id}/move`, {
+                                                method: 'POST',
+                                                headers: {
+                                                    'Authorization': `Bearer ${accessToken}`,
+                                                    'Content-Type': 'application/json'
+                                                },
+                                                body: JSON.stringify({
+                                                    destinationId: folderId
+                                                })
+                                            });
+                                        }
+                                    }
+                                    break;
+                                case 'copy':
+                                    if (action.value) {
+                                        const folderId = await getFolderId(action.value);
+                                        if (folderId) {
+                                            await fetch(`https://graph.microsoft.com/v1.0/me/messages/${message.id}/copy`, {
+                                                method: 'POST',
+                                                headers: {
+                                                    'Authorization': `Bearer ${accessToken}`,
+                                                    'Content-Type': 'application/json'
+                                                },
+                                                body: JSON.stringify({
+                                                    destinationId: folderId
+                                                })
+                                            });
+                                        }
+                                    }
+                                    break;
+                                case 'delete':
+                                    await fetch(`https://graph.microsoft.com/v1.0/me/messages/${message.id}`, {
+                                        method: 'DELETE',
+                                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                                    });
+                                    return null;
                                 case 'markRead':
                                     if (!message.isRead) {
                                         await fetch(`https://graph.microsoft.com/v1.0/me/messages/${message.id}`, {
@@ -1440,12 +1582,6 @@
                                         message.isRead = true;
                                     }
                                     break;
-                                case 'delete':
-                                    await fetch(`https://graph.microsoft.com/v1.0/me/messages/${message.id}`, {
-                                        method: 'DELETE',
-                                        headers: { 'Authorization': `Bearer ${accessToken}` }
-                                    });
-                                    return null; // Message deleted
                                 case 'markJunk':
                                     await fetch(`https://graph.microsoft.com/v1.0/me/messages/${message.id}/markAsJunk`, {
                                         method: 'POST',
@@ -1456,7 +1592,22 @@
                                         body: JSON.stringify({ moveToJunk: true })
                                     });
                                     break;
-                                // Add more action types as needed
+                                case 'forward':
+                                    if (action.value) {
+                                        await fetch(`https://graph.microsoft.com/v1.0/me/messages/${message.id}/forward`, {
+                                            method: 'POST',
+                                            headers: {
+                                                'Authorization': `Bearer ${accessToken}`,
+                                                'Content-Type': 'application/json'
+                                            },
+                                            body: JSON.stringify({
+                                                toRecipients: action.value.split(',').map(email => ({
+                                                    emailAddress: { address: email.trim() }
+                                                }))
+                                            })
+                                        });
+                                    }
+                                    break;
                             }
                         } catch (error) {
                             console.error('Error applying rule action:', error);
@@ -1502,10 +1653,10 @@
                 
                 const msg = await response.json();
                 
-                // Apply rules to the message
+                // Apply rules to the message (this will actually move/delete on server)
                 const processedMsg = await applyRulesToMessage(msg);
                 if (!processedMsg) {
-                    // Message was deleted by rule
+                    // Message was deleted by rule - refresh folder
                     loadFolder(currentFolder);
                     return;
                 }
@@ -1569,7 +1720,7 @@
             
             renderRulesList();
             resetRuleForm();
-            alert('Rule saved successfully');
+            alert('Rule saved successfully. It will apply to new messages you open.');
         }
 
         function renderRulesList() {
@@ -1995,7 +2146,7 @@
                             <strong>Attachments:</strong>
                             <div style="margin-top: 12px;">
                                 ${(msg.attachments || []).map(att => `
-                                    <div class="attachment-item" onclick="downloadAttachment('${msg.id}', '${att.id}', '${escapeHtml(att.name)}')">
+                                    <div class="attachment-item" onclick="previewAttachment('${msg.id}', '${att.id}', '${escapeHtml(att.name)}', '${att.contentType}')">
                                         📎 ${escapeHtml(att.name)} (${Math.round(att.size/1024)} KB)
                                     </div>
                                 `).join('')}
@@ -2004,6 +2155,37 @@
                     ` : ''}
                 </div>
             `;
+        }
+
+        // PDF Preview Function
+        async function previewAttachment(messageId, attachmentId, fileName, contentType) {
+            if (contentType === 'application/pdf') {
+                try {
+                    const response = await fetch(
+                        `https://graph.microsoft.com/v1.0/me/messages/${messageId}/attachments/${attachmentId}/$value`,
+                        {
+                            headers: { 'Authorization': `Bearer ${accessToken}` }
+                        }
+                    );
+                    
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const url = URL.createObjectURL(blob);
+                        document.getElementById('pdfFileName').textContent = fileName;
+                        document.getElementById('pdfFrame').src = url;
+                        document.getElementById('pdfModal').classList.add('active');
+                    }
+                } catch (error) {
+                    console.error('Error loading PDF:', error);
+                }
+            } else {
+                downloadAttachment(messageId, attachmentId, fileName);
+            }
+        }
+
+        function closePDFModal() {
+            document.getElementById('pdfModal').classList.remove('active');
+            document.getElementById('pdfFrame').src = '';
         }
 
         // Helper to escape HTML
