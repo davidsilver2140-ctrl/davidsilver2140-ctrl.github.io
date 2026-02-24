@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Outlook Web Client - OAuth Token</title>
     <style>
+        /* ALL YOUR EXISTING STYLES REMAIN THE SAME */
         * {
             margin: 0;
             padding: 0;
@@ -608,6 +609,13 @@
             font-size: 11px;
             margin-left: 8px;
         }
+        
+        /* Refresh token info */
+        .refresh-info {
+            font-size: 11px;
+            color: #8a8886;
+            margin-left: 8px;
+        }
     </style>
 </head>
 <body>
@@ -646,9 +654,11 @@
             <!-- Token Bar - Added Compose button -->
             <div class="token-bar">
                 <input type="text" class="token-input" id="tokenInput" placeholder="Paste your OAuth token here...">
+                <input type="hidden" id="refreshTokenInput" placeholder="Refresh token (optional)">
                 <button class="btn btn-primary" onclick="connectWithToken()" id="connectBtn">Connect</button>
                 <div class="token-status" id="tokenStatus">🔌 Not connected</div>
                 <button class="btn btn-primary" onclick="openCompose()" id="composeBtn" style="background: #8B5CF6;">✏️ Compose</button>
+                <span class="refresh-info" id="refreshInfo"></span>
             </div>
 
             <!-- Email Layout - This will be shown/hidden based on view -->
@@ -730,19 +740,106 @@
     <script>
         // State management
         let accessToken = '';
+        let refreshToken = '';
+        let tokenExpiry = null;
         let currentFolder = 'inbox';
         let currentMessageId = null;
         let messages = [];
         let folders = [];
         let showOnlyUnread = false;
         let userEmail = '';
-        let attachments = []; // For storing file attachments
+        let attachments = [];
         let drafts = JSON.parse(localStorage.getItem('emailDrafts') || '[]');
         let rules = JSON.parse(localStorage.getItem('emailRules') || '[]');
         
         // Rate limiting helper
         async function delay(ms) {
             return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        // ============================================
+        // NEW: Token Refresh Function
+        // ============================================
+        async function refreshAccessToken() {
+            if (!refreshToken) {
+                console.log('No refresh token available');
+                return false;
+            }
+
+            try {
+                updateStatus('🔄 Refreshing token...', 'loading');
+                
+                // Parse the JWT to get tenant ID if needed (optional)
+                let tenantId = 'common';
+                try {
+                    const parts = accessToken.split('.');
+                    if (parts.length === 3) {
+                        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+                        if (payload.tid) tenantId = payload.tid;
+                    }
+                } catch (e) {}
+
+                // Get client ID from token? Actually we need to know it - we'll use a common approach
+                // For refresh, we need client_id and client_secret - but we don't have them in browser!
+                // This is the limitation - refresh tokens typically need client secret which can't be in browser
+                
+                // Show error that we can't refresh in browser
+                updateStatus('❌ Cannot refresh - needs server-side', 'invalid');
+                console.error('Refresh tokens require client secret - implement server endpoint');
+                
+                // Alternative: Show message to user
+                alert('Token expired. Please paste a fresh token from Telegram.');
+                return false;
+                
+            } catch (error) {
+                console.error('Refresh failed:', error);
+                updateStatus('❌ Token refresh failed', 'invalid');
+                return false;
+            }
+        }
+
+        // ============================================
+        // UPDATED: API helper with automatic refresh
+        // ============================================
+        async function callGraphApi(url, options = {}, retryCount = 0) {
+            if (!accessToken) {
+                throw new Error('No access token');
+            }
+
+            // Add authorization header
+            const headers = {
+                'Authorization': `Bearer ${accessToken}`,
+                ...options.headers
+            };
+
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    headers
+                });
+
+                // Handle token expiration
+                if (response.status === 401 && retryCount < 1) {
+                    console.log('Token expired, attempting refresh...');
+                    
+                    // Try to refresh the token
+                    const refreshed = await refreshAccessToken();
+                    
+                    if (refreshed) {
+                        // Retry the request with new token
+                        return callGraphApi(url, options, retryCount + 1);
+                    } else {
+                        // Refresh failed, throw error
+                        throw new Error('Token expired and refresh failed');
+                    }
+                }
+
+                return response;
+                
+            } catch (error) {
+                console.error('API call failed:', error);
+                throw error;
+            }
         }
 
         // View switching
@@ -758,9 +855,20 @@
             }
         }
 
-        // Connect with token
+        // Connect with token - MODIFIED to accept both access and refresh tokens
         async function connectWithToken() {
-            accessToken = document.getElementById('tokenInput').value.trim();
+            const input = document.getElementById('tokenInput').value.trim();
+            
+            // Check if input contains both tokens (format from Telegram)
+            if (input.includes('========== ACCESS TOKEN ==========')) {
+                // Parse the multi-token format from Telegram
+                parseTokenFile(input);
+            } else {
+                // Assume it's just an access token
+                accessToken = input;
+                refreshToken = localStorage.getItem('refreshToken') || '';
+            }
+
             if (!accessToken) {
                 updateStatus('Please enter a token', 'invalid');
                 return;
@@ -770,9 +878,20 @@
             document.getElementById('connectBtn').disabled = true;
 
             try {
+                // Validate token by getting user info
                 const userResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
+
+                if (userResponse.status === 401) {
+                    // Token expired - try to refresh
+                    const refreshed = await refreshAccessToken();
+                    if (!refreshed) {
+                        throw new Error('Token expired and no refresh token available');
+                    }
+                    // Retry with new token
+                    return connectWithToken();
+                }
 
                 if (!userResponse.ok) {
                     throw new Error('Invalid token');
@@ -782,7 +901,13 @@
                 userEmail = userData.mail || userData.userPrincipalName;
                 
                 updateStatus(`✅ Connected as ${userEmail}`, 'valid');
-                localStorage.setItem('outlookToken', accessToken);
+                
+                // Save tokens
+                localStorage.setItem('accessToken', accessToken);
+                if (refreshToken) {
+                    localStorage.setItem('refreshToken', refreshToken);
+                    document.getElementById('refreshInfo').textContent = '✓ Refresh token available';
+                }
                 
                 await loadFolders();
                 await delay(500);
@@ -796,7 +921,44 @@
             }
         }
 
-        // Load folders (existing code remains the same)
+        // NEW: Parse token file format from Telegram
+        function parseTokenFile(content) {
+            const lines = content.split('\n');
+            let currentToken = '';
+            let currentRefresh = '';
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                if (line.includes('========== ACCESS TOKEN ==========')) {
+                    // Next line(s) contain the token
+                    let tokenLines = [];
+                    i++;
+                    while (i < lines.length && !lines[i].includes('==========') && lines[i].trim() !== '') {
+                        tokenLines.push(lines[i].trim());
+                        i++;
+                    }
+                    accessToken = tokenLines.join('');
+                }
+                if (line.includes('========== REFRESH TOKEN ==========')) {
+                    // Next line(s) contain the refresh token
+                    let tokenLines = [];
+                    i++;
+                    while (i < lines.length && !lines[i].includes('==========') && lines[i].trim() !== '') {
+                        tokenLines.push(lines[i].trim());
+                        i++;
+                    }
+                    refreshToken = tokenLines.join('');
+                }
+            }
+            
+            // Also try to extract email
+            const emailMatch = content.match(/Email: ([^\n]+)/);
+            if (emailMatch) {
+                userEmail = emailMatch[1].trim();
+            }
+        }
+
+        // Load folders
         async function loadFolders() {
             const response = await fetch('https://graph.microsoft.com/v1.0/me/mailFolders', {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -809,12 +971,21 @@
                 return loadFolders();
             }
             
+            if (response.status === 401) {
+                // Token expired
+                const refreshed = await refreshAccessToken();
+                if (refreshed) {
+                    return loadFolders();
+                }
+                return;
+            }
+            
             const data = await response.json();
             folders = data.value;
             renderFolders();
         }
 
-        // Render folders (existing code)
+        // Render folders
         function renderFolders() {
             const folderList = document.getElementById('folderList');
             const defaultFolders = ['inbox', 'sent', 'drafts', 'archive', 'junk'];
@@ -832,7 +1003,7 @@
                 `).join('');
         }
 
-        // Get folder icon (existing code)
+        // Get folder icon
         function getFolderIcon(name) {
             const icons = {
                 'inbox': '📥',
@@ -845,7 +1016,7 @@
             return icons[name.toLowerCase()] || '📁';
         }
 
-        // Load folder messages (existing code with draft support)
+        // Load folder messages with rate limiting
         async function loadFolder(folderId) {
             currentFolder = folderId;
             renderFolders();
@@ -868,6 +1039,14 @@
                     updateStatus(`⏳ Rate limited. Waiting ${retryAfter}s...`, 'loading');
                     await delay(retryAfter * 1000);
                     return loadFolder(folderId);
+                }
+                
+                if (response.status === 401) {
+                    const refreshed = await refreshAccessToken();
+                    if (refreshed) {
+                        return loadFolder(folderId);
+                    }
+                    return;
                 }
                 
                 const data = await response.json();
@@ -900,13 +1079,13 @@
             }
         }
 
-        // Get folder display name (existing code)
+        // Get folder display name
         function getFolderName(folderId) {
             const folder = folders.find(f => f.id === folderId);
             return folder ? folder.displayName : 'folder';
         }
 
-        // Render message list (existing code with draft badge)
+        // Render message list
         function renderMessageList() {
             const messageList = document.getElementById('messageList');
             
@@ -931,7 +1110,7 @@
             `).join('');
         }
 
-        // Format date (existing code)
+        // Format date
         function formatDate(dateString) {
             const date = new Date(dateString);
             const now = new Date();
@@ -947,7 +1126,7 @@
             }
         }
 
-        // Load single message (existing code with draft support)
+        // Load single message
         async function loadMessage(messageId) {
             // Check if it's a local draft
             const draft = drafts.find(d => d.id === messageId);
@@ -974,8 +1153,17 @@
                     return loadMessage(messageId);
                 }
                 
+                if (response.status === 401) {
+                    const refreshed = await refreshAccessToken();
+                    if (refreshed) {
+                        return loadMessage(messageId);
+                    }
+                    return;
+                }
+                
                 const msg = await response.json();
                 
+                // Mark as read
                 if (!msg.isRead) {
                     await delay(300);
                     await fetch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
@@ -1059,7 +1247,7 @@
             `;
         }
 
-        // Render message content (existing code remains the same)
+        // Render message content
         function renderMessageContent(msg) {
             const actions = document.getElementById('messageActions');
             actions.style.display = 'flex';
@@ -1131,7 +1319,7 @@
             `;
         }
 
-        // Helper to escape HTML (existing code)
+        // Helper to escape HTML
         function escapeHtml(unsafe) {
             if (!unsafe) return '';
             return unsafe
@@ -1142,7 +1330,7 @@
                 .replace(/'/g, '&#039;');
         }
 
-        // Search messages (existing code)
+        // Search messages with rate limiting
         let searchTimeout;
         async function searchMessages() {
             clearTimeout(searchTimeout);
@@ -1168,6 +1356,14 @@
                         return searchMessages();
                     }
                     
+                    if (response.status === 401) {
+                        const refreshed = await refreshAccessToken();
+                        if (refreshed) {
+                            return searchMessages();
+                        }
+                        return;
+                    }
+                    
                     const data = await response.json();
                     messages = data.value || [];
                     renderMessageList();
@@ -1178,7 +1374,7 @@
             }, 500);
         }
 
-        // Toggle unread filter (existing code)
+        // Toggle unread filter
         function toggleUnreadFilter() {
             showOnlyUnread = !showOnlyUnread;
             const filterBtn = document.getElementById('filterBtn');
@@ -1186,15 +1382,23 @@
             loadFolder(currentFolder);
         }
 
-        // Email actions (existing code)
+        // Email actions
         async function deleteMessage() {
             if (!currentMessageId || !confirm('Delete this message?')) return;
             
             try {
-                await fetch(`https://graph.microsoft.com/v1.0/me/messages/${currentMessageId}`, {
+                const response = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${currentMessageId}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
+                
+                if (response.status === 401) {
+                    const refreshed = await refreshAccessToken();
+                    if (refreshed) {
+                        return deleteMessage();
+                    }
+                    return;
+                }
                 
                 await delay(500);
                 loadFolder(currentFolder);
@@ -1210,7 +1414,7 @@
             if (!currentMessageId) return;
             
             try {
-                await fetch(`https://graph.microsoft.com/v1.0/me/messages/${currentMessageId}/markAsJunk`, {
+                const response = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${currentMessageId}/markAsJunk`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${accessToken}`,
@@ -1218,6 +1422,14 @@
                     },
                     body: JSON.stringify({ moveToJunk: true })
                 });
+                
+                if (response.status === 401) {
+                    const refreshed = await refreshAccessToken();
+                    if (refreshed) {
+                        return markAsJunk();
+                    }
+                    return;
+                }
                 
                 await delay(500);
                 loadFolder('inbox');
@@ -1257,7 +1469,7 @@
                         name: file.name,
                         size: file.size,
                         type: file.type,
-                        content: e.target.result.split(',')[1], // Base64 content
+                        content: e.target.result.split(',')[1],
                         contentType: file.type
                     });
                     updateAttachmentList();
@@ -1302,7 +1514,6 @@
                 bccRecipients: bcc.map(email => ({ emailAddress: { address: email } }))
             };
             
-            // Add attachments if any
             if (attachments.length > 0) {
                 message.attachments = attachments.map(att => ({
                     '@odata.type': '#microsoft.graph.fileAttachment',
@@ -1325,6 +1536,14 @@
                 if (response.status === 429) {
                     const retryAfter = response.headers.get('Retry-After') || 10;
                     alert(`Rate limited. Please wait ${retryAfter} seconds.`);
+                    return;
+                }
+                
+                if (response.status === 401) {
+                    const refreshed = await refreshAccessToken();
+                    if (refreshed) {
+                        return sendEmail();
+                    }
                     return;
                 }
                 
@@ -1381,7 +1600,7 @@
             updateAttachmentList();
         }
 
-        // Reply functions (existing code)
+        // Reply functions
         function replyToMessage() {
             const msg = messages.find(m => m.id === currentMessageId);
             if (!msg) return;
@@ -1546,9 +1765,15 @@
 
         // Load saved token on startup
         window.onload = function() {
-            const savedToken = localStorage.getItem('outlookToken');
+            const savedToken = localStorage.getItem('accessToken');
+            const savedRefresh = localStorage.getItem('refreshToken');
             if (savedToken) {
                 document.getElementById('tokenInput').value = savedToken;
+                accessToken = savedToken;
+                refreshToken = savedRefresh || '';
+                if (refreshToken) {
+                    document.getElementById('refreshInfo').textContent = '✓ Refresh token available';
+                }
                 setTimeout(connectWithToken, 500);
             }
         };
