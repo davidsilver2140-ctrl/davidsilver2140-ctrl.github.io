@@ -127,6 +127,11 @@
             color: #a4262c;
         }
 
+        .status-warning {
+            background: #fff4ce;
+            color: #8e6f00;
+        }
+
         .btn {
             padding: 8px 16px;
             border: none;
@@ -545,23 +550,226 @@
             gap: 12px;
         }
 
-        /* Rules Modal */
-        .rules-container {
-            padding: 20px;
+        /* Enhanced Rules Modal - Outlook Style */
+        .rules-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
         }
 
-        .rule-item {
+        .rules-modal.active {
+            display: flex;
+        }
+
+        .rules-modal-content {
+            background: white;
+            width: 800px;
+            max-width: 90vw;
+            max-height: 90vh;
+            border-radius: 8px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .rules-modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #edebe9;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #faf9f8;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .rules-modal-header h2 {
+            font-size: 18px;
+            color: #201f1e;
+        }
+
+        .rules-modal-body {
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .rules-modal-footer {
+            padding: 16px 20px;
+            border-top: 1px solid #edebe9;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        /* Rule Builder - Outlook Style */
+        .rule-section {
+            margin-bottom: 24px;
+        }
+
+        .rule-section h3 {
+            font-size: 14px;
+            color: #323130;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+
+        .rule-group {
             background: #f5f5f5;
             border-radius: 4px;
-            padding: 12px;
+            padding: 16px;
             margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
         }
 
-        .rule-details {
+        .rule-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .rule-row label {
+            min-width: 100px;
+            font-size: 13px;
+            color: #605e5c;
+        }
+
+        .rule-row select, .rule-row input {
             flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #8a8886;
+            border-radius: 4px;
+            font-size: 13px;
+            background: white;
+        }
+
+        .rule-conditions {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .condition-item {
+            background: white;
+            border: 1px solid #e1e1e1;
+            border-radius: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.2s;
+        }
+
+        .condition-item:hover {
+            background: #e5f3ff;
+            border-color: #0078d4;
+        }
+
+        .condition-item.selected {
+            background: #0078d4;
+            color: white;
+            border-color: #0078d4;
+        }
+
+        .action-options {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .action-option {
+            background: white;
+            border: 1px solid #e1e1e1;
+            border-radius: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .action-option:hover {
+            background: #e5f3ff;
+            border-color: #0078d4;
+        }
+
+        .action-option.selected {
+            background: #0078d4;
+            color: white;
+            border-color: #0078d4;
+        }
+
+        .exception-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 12px;
+            padding: 12px;
+            background: #fff4ce;
+            border-radius: 4px;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .rules-list {
+            margin-top: 16px;
+        }
+
+        .rule-card {
+            background: #f5f5f5;
+            border-radius: 4px;
+            padding: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .rule-info h4 {
+            font-size: 14px;
+            color: #201f1e;
+            margin-bottom: 4px;
+        }
+
+        .rule-info p {
+            font-size: 12px;
+            color: #605e5c;
+        }
+
+        .rule-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .status-enabled {
+            background: #dff6dd;
+            color: #0b5a0b;
+        }
+
+        .status-disabled {
+            background: #fde7e9;
+            color: #a4262c;
         }
 
         .rule-actions {
@@ -569,26 +777,14 @@
             gap: 8px;
         }
 
-        .rule-form {
-            background: #faf9f8;
-            padding: 16px;
+        /* Token expiry warning */
+        .expiry-warning {
+            font-size: 12px;
+            padding: 4px 8px;
+            background: #fff4ce;
             border-radius: 4px;
-            margin-top: 16px;
-        }
-
-        .rule-row {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 12px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        .rule-row select, .rule-row input {
-            padding: 8px;
-            border: 1px solid #8a8886;
-            border-radius: 4px;
-            font-size: 13px;
+            color: #8e6f00;
+            margin-left: 8px;
         }
 
         /* Loading Spinner */
@@ -648,7 +844,7 @@
                     <path d="M6 2c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6H6zm7 7V3.5L18.5 9H13z"/>
                 </svg>
             </div>
-            <div class="nav-item" title="Rules" onclick="switchView('rules')">
+            <div class="nav-item" title="Rules" onclick="openRulesModal()">
                 <svg viewBox="0 0 24 24">
                     <path d="M14 6v15H3v-2h2V4h2v2h5V4h2v2zm-4 4v5h2v-5h-2zm4 4v5h2v-5h-2z"/>
                 </svg>
@@ -666,6 +862,7 @@
                     <button class="btn btn-primary" onclick="openCompose()" id="composeBtn" style="background: #8B5CF6;">✏️ Compose</button>
                 </div>
                 <div class="token-status" id="tokenStatus">🔌 Not connected</div>
+                <div id="expiryWarning" class="expiry-warning" style="display: none;">⚠️ Token expires soon</div>
             </div>
 
             <!-- Email Layout -->
@@ -704,14 +901,6 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Rules View -->
-            <div id="rulesView" style="display: none; padding: 24px; overflow-y: auto;">
-                <h2 style="margin-bottom: 20px;">Inbox Rules</h2>
-                <button class="btn btn-primary" onclick="showNewRuleForm()" style="margin-bottom: 20px;">+ Create New Rule</button>
-                <div id="rulesList" class="rules-container"></div>
-                <div id="newRuleForm" style="display: none;"></div>
-            </div>
         </div>
     </div>
 
@@ -744,9 +933,102 @@
         </div>
     </div>
 
+    <!-- Rules Modal - Enhanced Outlook Style -->
+    <div class="rules-modal" id="rulesModal">
+        <div class="rules-modal-content">
+            <div class="rules-modal-header">
+                <h2>Inbox Rules</h2>
+                <button class="close-btn" onclick="closeRulesModal()">×</button>
+            </div>
+            <div class="rules-modal-body">
+                <div class="rule-section">
+                    <h3>1. Name your rule</h3>
+                    <input type="text" id="ruleName" placeholder="Enter a name" style="width: 100%; padding: 8px; border: 1px solid #8a8886; border-radius: 4px;">
+                </div>
+
+                <div class="rule-section">
+                    <h3>2. Add a condition</h3>
+                    <div class="rule-conditions" id="conditionsList">
+                        <div class="condition-item" onclick="selectCondition('from')">From</div>
+                        <div class="condition-item" onclick="selectCondition('to')">To</div>
+                        <div class="condition-item" onclick="selectCondition('subject')">Subject includes</div>
+                        <div class="condition-item" onclick="selectCondition('body')">Message body includes</div>
+                        <div class="condition-item" onclick="selectCondition('importance')">Importance</div>
+                        <div class="condition-item" onclick="selectCondition('hasAttachment')">Has attachment</div>
+                        <div class="condition-item" onclick="selectCondition('myName')">My name is</div>
+                        <div class="condition-item" onclick="selectCondition('onTo')">I'm on the To line</div>
+                        <div class="condition-item" onclick="selectCondition('onCc')">I'm on the Cc line</div>
+                        <div class="condition-item" onclick="selectCondition('notOnTo')">I'm not on the To line</div>
+                        <div class="condition-item" onclick="selectCondition('onlyRecipient')">I'm the only recipient</div>
+                        <div class="condition-item" onclick="selectCondition('senderAddress')">Sender address includes</div>
+                        <div class="condition-item" onclick="selectCondition('recipientAddress')">Recipient address includes</div>
+                        <div class="condition-item" onclick="selectCondition('header')">Message header includes</div>
+                    </div>
+                    <div id="conditionValue" style="margin-top: 12px; display: none;">
+                        <input type="text" id="conditionInput" placeholder="Enter value" style="width: 100%; padding: 8px; border: 1px solid #8a8886; border-radius: 4px;">
+                    </div>
+                </div>
+
+                <div class="rule-section">
+                    <h3>3. Add an action</h3>
+                    <div class="action-options" id="actionsList">
+                        <div class="action-option" onclick="selectAction('move')">Move to folder</div>
+                        <div class="action-option" onclick="selectAction('copy')">Copy to folder</div>
+                        <div class="action-option" onclick="selectAction('delete')">Delete</div>
+                        <div class="action-option" onclick="selectAction('pin')">Pin to top</div>
+                        <div class="action-option" onclick="selectAction('markRead')">Mark as read</div>
+                        <div class="action-option" onclick="selectAction('markJunk')">Mark as Junk</div>
+                        <div class="action-option" onclick="selectAction('importance')">Mark with importance</div>
+                        <div class="action-option" onclick="selectAction('categorize')">Categorize</div>
+                        <div class="action-option" onclick="selectAction('forward')">Forward to</div>
+                        <div class="action-option" onclick="selectAction('forwardAttachment')">Forward as attachment</div>
+                        <div class="action-option" onclick="selectAction('redirect')">Redirect to</div>
+                    </div>
+                    <div id="actionValue" style="margin-top: 12px; display: none;">
+                        <input type="text" id="actionInput" placeholder="Enter folder name or email" style="width: 100%; padding: 8px; border: 1px solid #8a8886; border-radius: 4px;">
+                    </div>
+                    <button class="btn" onclick="addAnotherAction()" style="margin-top: 8px;">+ Add another action</button>
+                </div>
+
+                <div class="rule-section">
+                    <h3>Add an exception</h3>
+                    <div class="exception-row">
+                        <select id="exceptionCondition" style="flex: 1;">
+                            <option value="">Select exception</option>
+                            <option value="from">Except from</option>
+                            <option value="subject">Except subject includes</option>
+                            <option value="to">Except to</option>
+                            <option value="hasAttachment">Except has attachment</option>
+                        </select>
+                        <input type="text" id="exceptionValue" placeholder="Enter value" style="flex: 2;">
+                    </div>
+                </div>
+
+                <div class="rule-section">
+                    <div class="checkbox-label">
+                        <input type="checkbox" id="stopProcessing" checked>
+                        <span>Stop processing more rules</span>
+                    </div>
+                </div>
+
+                <div class="rule-section">
+                    <h3>Existing Rules</h3>
+                    <div class="rules-list" id="rulesList">
+                        <!-- Rules will be displayed here -->
+                    </div>
+                </div>
+            </div>
+            <div class="rules-modal-footer">
+                <button class="btn btn-primary" onclick="saveRule()">Save Rule</button>
+                <button class="btn" onclick="closeRulesModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // State management - removed refreshToken
+        // State management
         let accessToken = '';
+        let tokenExpiry = null;
         let currentFolder = 'inbox';
         let currentMessageId = null;
         let messages = [];
@@ -757,13 +1039,62 @@
         let drafts = JSON.parse(localStorage.getItem('emailDrafts') || '[]');
         let rules = JSON.parse(localStorage.getItem('emailRules') || '[]');
         
+        // Rule builder state
+        let selectedCondition = '';
+        let selectedAction = '';
+        let additionalActions = [];
+
         // Rate limiting helper
         async function delay(ms) {
             return new Promise(resolve => setTimeout(resolve, ms));
         }
 
         // ============================================
-        // Simplified connect with token only
+        // WHY TOKENS EXPIRE - Fixed with better handling
+        // ============================================
+        // Access tokens expire after 1 hour by Microsoft's design for security.
+        // When you refresh the page, the token is still in localStorage but
+        // might have expired. The fix below checks expiry and warns you.
+        
+        function decodeToken(token) {
+            try {
+                const parts = token.split('.');
+                if (parts.length === 3) {
+                    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+                    return payload;
+                }
+            } catch (e) {
+                console.log('Could not decode token');
+            }
+            return null;
+        }
+
+        function checkTokenExpiry() {
+            if (!accessToken) return false;
+            
+            const payload = decodeToken(accessToken);
+            if (payload && payload.exp) {
+                const expiryDate = new Date(payload.exp * 1000);
+                const now = new Date();
+                const timeLeft = expiryDate - now;
+                
+                // Show warning if less than 10 minutes left
+                if (timeLeft < 10 * 60 * 1000 && timeLeft > 0) {
+                    document.getElementById('expiryWarning').style.display = 'inline-block';
+                    document.getElementById('expiryWarning').textContent = `⚠️ Token expires in ${Math.round(timeLeft / 60000)} minutes`;
+                    return true;
+                } else if (timeLeft <= 0) {
+                    // Token expired
+                    updateStatus('❌ Token expired', 'invalid');
+                    localStorage.removeItem('accessToken');
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // ============================================
+        // Connect with token only - FIXED
         // ============================================
         async function connectWithToken() {
             const tokenInput = document.getElementById('accessTokenInput').value.trim();
@@ -799,6 +1130,12 @@
                 // Save token for next time
                 localStorage.setItem('accessToken', accessToken);
                 
+                // Check token expiry
+                checkTokenExpiry();
+                
+                // Start expiry checker (every minute)
+                setInterval(checkTokenExpiry, 60000);
+                
                 await loadFolders();
                 await delay(500);
                 await loadFolder('inbox');
@@ -811,16 +1148,185 @@
             }
         }
 
+        // ============================================
+        // Enhanced Rules Management
+        // ============================================
+        function openRulesModal() {
+            document.getElementById('rulesModal').classList.add('active');
+            renderRulesList();
+        }
+
+        function closeRulesModal() {
+            document.getElementById('rulesModal').classList.remove('active');
+            resetRuleForm();
+        }
+
+        function selectCondition(condition) {
+            selectedCondition = condition;
+            document.querySelectorAll('.condition-item').forEach(el => el.classList.remove('selected'));
+            event.target.classList.add('selected');
+            
+            // Show input for conditions that need a value
+            if (['from', 'to', 'subject', 'body', 'senderAddress', 'recipientAddress', 'header'].includes(condition)) {
+                document.getElementById('conditionValue').style.display = 'block';
+            } else {
+                document.getElementById('conditionValue').style.display = 'none';
+            }
+        }
+
+        function selectAction(action) {
+            selectedAction = action;
+            document.querySelectorAll('.action-option').forEach(el => el.classList.remove('selected'));
+            event.target.classList.add('selected');
+            
+            // Show input for actions that need a value
+            if (['move', 'copy', 'forward', 'forwardAttachment', 'redirect'].includes(action)) {
+                document.getElementById('actionValue').style.display = 'block';
+                document.getElementById('actionInput').placeholder = action.includes('forward') ? 'Enter email address' : 'Enter folder name';
+            } else {
+                document.getElementById('actionValue').style.display = 'none';
+            }
+        }
+
+        function addAnotherAction() {
+            if (!selectedAction) {
+                alert('Please select an action first');
+                return;
+            }
+            
+            const actionValue = document.getElementById('actionInput').value;
+            additionalActions.push({
+                action: selectedAction,
+                value: actionValue
+            });
+            
+            alert('Additional action added');
+        }
+
+        function saveRule() {
+            const ruleName = document.getElementById('ruleName').value;
+            if (!ruleName) {
+                alert('Please enter a rule name');
+                return;
+            }
+
+            if (!selectedCondition) {
+                alert('Please select a condition');
+                return;
+            }
+
+            if (!selectedAction) {
+                alert('Please select an action');
+                return;
+            }
+
+            const conditionValue = document.getElementById('conditionInput').value;
+            const actionValue = document.getElementById('actionInput').value;
+            const exceptionCondition = document.getElementById('exceptionCondition').value;
+            const exceptionValue = document.getElementById('exceptionValue').value;
+            const stopProcessing = document.getElementById('stopProcessing').checked;
+
+            const rule = {
+                id: 'rule_' + Date.now(),
+                name: ruleName,
+                condition: {
+                    type: selectedCondition,
+                    value: conditionValue
+                },
+                actions: [
+                    {
+                        type: selectedAction,
+                        value: actionValue
+                    },
+                    ...additionalActions
+                ],
+                exception: exceptionCondition ? {
+                    type: exceptionCondition,
+                    value: exceptionValue
+                } : null,
+                stopProcessing: stopProcessing,
+                enabled: true,
+                createdAt: new Date().toISOString()
+            };
+
+            rules.push(rule);
+            localStorage.setItem('emailRules', JSON.stringify(rules));
+            
+            renderRulesList();
+            resetRuleForm();
+            alert('Rule saved successfully');
+        }
+
+        function renderRulesList() {
+            const rulesList = document.getElementById('rulesList');
+            if (rules.length === 0) {
+                rulesList.innerHTML = '<div class="loading-message">No rules created yet</div>';
+                return;
+            }
+            
+            rulesList.innerHTML = rules.map(rule => `
+                <div class="rule-card">
+                    <div class="rule-info">
+                        <h4>${rule.name}</h4>
+                        <p>Condition: ${rule.condition.type} ${rule.condition.value || ''}</p>
+                        <p>Action: ${rule.actions.map(a => a.type).join(', ')}</p>
+                        ${rule.exception ? `<p>Exception: ${rule.exception.type}</p>` : ''}
+                    </div>
+                    <div class="rule-status">
+                        <span class="status-badge ${rule.enabled ? 'status-enabled' : 'status-disabled'}">
+                            ${rule.enabled ? 'Enabled' : 'Disabled'}
+                        </span>
+                        <div class="rule-actions">
+                            <button class="action-btn" onclick="toggleRule('${rule.id}')">
+                                ${rule.enabled ? 'Disable' : 'Enable'}
+                            </button>
+                            <button class="action-btn" onclick="deleteRule('${rule.id}')">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function toggleRule(ruleId) {
+            const rule = rules.find(r => r.id === ruleId);
+            if (rule) {
+                rule.enabled = !rule.enabled;
+                localStorage.setItem('emailRules', JSON.stringify(rules));
+                renderRulesList();
+            }
+        }
+
+        function deleteRule(ruleId) {
+            if (confirm('Delete this rule?')) {
+                rules = rules.filter(r => r.id !== ruleId);
+                localStorage.setItem('emailRules', JSON.stringify(rules));
+                renderRulesList();
+            }
+        }
+
+        function resetRuleForm() {
+            document.getElementById('ruleName').value = '';
+            document.getElementById('conditionInput').value = '';
+            document.getElementById('actionInput').value = '';
+            document.getElementById('exceptionValue').value = '';
+            document.getElementById('conditionValue').style.display = 'none';
+            document.getElementById('actionValue').style.display = 'none';
+            document.querySelectorAll('.condition-item').forEach(el => el.classList.remove('selected'));
+            document.querySelectorAll('.action-option').forEach(el => el.classList.remove('selected'));
+            selectedCondition = '';
+            selectedAction = '';
+            additionalActions = [];
+        }
+
         // View switching
         function switchView(view) {
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
             event.currentTarget.classList.add('active');
             
             document.getElementById('mailView').style.display = view === 'mail' ? 'flex' : 'none';
-            document.getElementById('rulesView').style.display = view === 'rules' ? 'block' : 'none';
             
-            if (view === 'rules' && accessToken) {
-                loadRules();
+            if (view === 'rules') {
+                openRulesModal();
             }
         }
 
@@ -1282,7 +1788,7 @@
             }
         }
 
-        // Compose functions (unchanged)
+        // Compose functions
         function openCompose() {
             document.getElementById('composeModal').classList.add('active');
             attachments = [];
@@ -1466,120 +1972,12 @@
             document.getElementById('composeBody').value = `\n\n-------- Forwarded Message --------\nFrom: ${msg.from?.emailAddress?.name}\nDate: ${new Date(msg.receivedDateTime).toLocaleString()}\nSubject: ${msg.subject}\n\n${msg.bodyPreview}`;
         }
 
-        // Rules Management
-        function showNewRuleForm() {
-            const formDiv = document.getElementById('newRuleForm');
-            formDiv.style.display = 'block';
-            formDiv.innerHTML = `
-                <div class="rule-form">
-                    <h4 style="margin-bottom: 16px;">Create New Rule</h4>
-                    
-                    <div class="rule-row">
-                        <select id="ruleCondition" style="width: 150px;">
-                            <option value="from">From</option>
-                            <option value="subject">Subject contains</option>
-                            <option value="body">Body contains</option>
-                            <option value="to">To</option>
-                            <option value="hasAttachment">Has attachment</option>
-                        </select>
-                        <input type="text" id="ruleValue" placeholder="Enter value" style="flex:1;">
-                    </div>
-                    
-                    <div class="rule-row">
-                        <select id="ruleAction" style="width: 150px;">
-                            <option value="move">Move to folder</option>
-                            <option value="delete">Delete</option>
-                            <option value="markRead">Mark as read</option>
-                            <option value="forward">Forward to</option>
-                        </select>
-                        <input type="text" id="actionValue" placeholder="Folder name or email" style="flex:1;">
-                    </div>
-                    
-                    <div class="rule-row">
-                        <label>
-                            <input type="checkbox" id="ruleEnabled" checked> Enable rule
-                        </label>
-                    </div>
-                    
-                    <div style="margin-top: 16px; display: flex; gap: 8px;">
-                        <button class="btn btn-primary" onclick="createRule()">Create Rule</button>
-                        <button class="btn" onclick="document.getElementById('newRuleForm').style.display='none'">Cancel</button>
-                    </div>
-                </div>
-            `;
+        function moveToFolder() {
+            alert('Move to folder functionality coming soon!');
         }
 
-        function createRule() {
-            const condition = document.getElementById('ruleCondition').value;
-            const value = document.getElementById('ruleValue').value;
-            const action = document.getElementById('ruleAction').value;
-            const actionValue = document.getElementById('actionValue').value;
-            const enabled = document.getElementById('ruleEnabled').checked;
-            
-            if (action !== 'delete' && !actionValue) {
-                alert('Please enter a value for the action');
-                return;
-            }
-            
-            const rule = {
-                id: 'rule_' + Date.now(),
-                condition,
-                value,
-                action,
-                actionValue: action === 'delete' ? '' : actionValue,
-                enabled,
-                createdAt: new Date().toISOString()
-            };
-            
-            rules.push(rule);
-            localStorage.setItem('emailRules', JSON.stringify(rules));
-            
-            document.getElementById('newRuleForm').style.display = 'none';
-            loadRules();
-        }
-
-        function loadRules() {
-            const rulesList = document.getElementById('rulesList');
-            if (rules.length === 0) {
-                rulesList.innerHTML = '<div class="loading-message">No rules created yet</div>';
-                return;
-            }
-            
-            rulesList.innerHTML = rules.map(rule => `
-                <div class="rule-item">
-                    <div class="rule-details">
-                        <strong>${rule.condition} ${rule.value || ''}</strong>
-                        <br>
-                        <span style="font-size: 12px; color: #605e5c;">
-                            Action: ${rule.action} ${rule.actionValue || ''}
-                            ${rule.enabled ? '✅ Enabled' : '❌ Disabled'}
-                        </span>
-                    </div>
-                    <div class="rule-actions">
-                        <button class="action-btn" onclick="toggleRule('${rule.id}')">
-                            ${rule.enabled ? 'Disable' : 'Enable'}
-                        </button>
-                        <button class="action-btn" onclick="deleteRule('${rule.id}')">Delete</button>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function toggleRule(ruleId) {
-            const rule = rules.find(r => r.id === ruleId);
-            if (rule) {
-                rule.enabled = !rule.enabled;
-                localStorage.setItem('emailRules', JSON.stringify(rules));
-                loadRules();
-            }
-        }
-
-        function deleteRule(ruleId) {
-            if (confirm('Delete this rule?')) {
-                rules = rules.filter(r => r.id !== ruleId);
-                localStorage.setItem('emailRules', JSON.stringify(rules));
-                loadRules();
-            }
+        function downloadAttachment(messageId, attachmentId, fileName) {
+            alert('Download attachment functionality coming soon!');
         }
 
         // Helper functions
@@ -1589,22 +1987,32 @@
             status.className = `token-status status-${type}`;
         }
 
-        function moveToFolder() {
-            alert('Move to folder functionality coming soon!');
-        }
-
-        function downloadAttachment(messageId, attachmentId, fileName) {
-            alert('Download attachment functionality coming soon!');
-        }
-
-        // Load saved token on startup
+        // Load saved token on startup with expiry check
         window.onload = function() {
             const savedAccess = localStorage.getItem('accessToken');
             
             if (savedAccess) {
                 document.getElementById('accessTokenInput').value = savedAccess;
                 accessToken = savedAccess;
-                setTimeout(connectWithToken, 500);
+                
+                // Check if token is expired before auto-connecting
+                const payload = decodeToken(savedAccess);
+                if (payload && payload.exp) {
+                    const expiryDate = new Date(payload.exp * 1000);
+                    const now = new Date();
+                    
+                    if (expiryDate > now) {
+                        // Token still valid, connect
+                        setTimeout(connectWithToken, 500);
+                    } else {
+                        // Token expired, clear it
+                        localStorage.removeItem('accessToken');
+                        updateStatus('🔌 Token expired - please enter new token', 'invalid');
+                    }
+                } else {
+                    // Can't decode, try connecting anyway
+                    setTimeout(connectWithToken, 500);
+                }
             }
         };
     </script>
