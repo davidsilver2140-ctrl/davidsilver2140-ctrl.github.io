@@ -570,8 +570,8 @@
 
         .rules-modal-content {
             background: white;
-            width: 800px;
-            max-width: 90vw;
+            width: 900px;
+            max-width: 95vw;
             max-height: 90vh;
             border-radius: 8px;
             box-shadow: 0 8px 16px rgba(0,0,0,0.2);
@@ -611,6 +611,9 @@
         /* Rule Builder - Outlook Style */
         .rule-section {
             margin-bottom: 24px;
+            background: #faf9f8;
+            border-radius: 4px;
+            padding: 16px;
         }
 
         .rule-section h3 {
@@ -621,7 +624,8 @@
         }
 
         .rule-group {
-            background: #f5f5f5;
+            background: white;
+            border: 1px solid #edebe9;
             border-radius: 4px;
             padding: 16px;
             margin-bottom: 12px;
@@ -636,7 +640,7 @@
         }
 
         .rule-row label {
-            min-width: 100px;
+            min-width: 120px;
             font-size: 13px;
             color: #605e5c;
         }
@@ -648,6 +652,35 @@
             border-radius: 4px;
             font-size: 13px;
             background: white;
+        }
+
+        .rule-row select:focus, .rule-row input:focus {
+            outline: none;
+            border-color: #0078d4;
+        }
+
+        .action-group {
+            background: white;
+            border: 1px solid #edebe9;
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 8px;
+        }
+
+        .action-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+            color: #0078d4;
+            font-weight: 600;
+            font-size: 12px;
+        }
+
+        .action-detail {
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .rule-conditions {
@@ -683,6 +716,17 @@
             grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
             gap: 8px;
             margin-top: 8px;
+        }
+
+        .action-category {
+            margin-bottom: 16px;
+        }
+
+        .action-category h4 {
+            font-size: 13px;
+            color: #323130;
+            margin-bottom: 8px;
+            font-weight: 600;
         }
 
         .action-option {
@@ -729,7 +773,8 @@
         }
 
         .rule-card {
-            background: #f5f5f5;
+            background: white;
+            border: 1px solid #edebe9;
             border-radius: 4px;
             padding: 16px;
             margin-bottom: 12px;
@@ -777,6 +822,12 @@
             gap: 8px;
         }
 
+        .additional-actions {
+            margin-top: 8px;
+            padding-left: 20px;
+            border-left: 2px solid #0078d4;
+        }
+
         /* Token expiry warning */
         .expiry-warning {
             font-size: 12px;
@@ -817,6 +868,13 @@
             border-radius: 10px;
             font-size: 11px;
             margin-left: 8px;
+        }
+
+        /* Signature rendering */
+        .message-body iframe {
+            width: 100%;
+            border: none;
+            background: white;
         }
     </style>
 </head>
@@ -924,7 +982,7 @@
                 </div>
                 <div id="attachmentList" class="attachment-list"></div>
                 
-                <textarea id="composeBody" placeholder="Message"></textarea>
+                <textarea id="composeBody" placeholder="Message (HTML supported, paste signatures here)"></textarea>
             </div>
             <div class="modal-footer">
                 <button class="btn" onclick="saveDraft()">Save Draft</button>
@@ -948,46 +1006,80 @@
 
                 <div class="rule-section">
                     <h3>2. Add a condition</h3>
-                    <div class="rule-conditions" id="conditionsList">
-                        <div class="condition-item" onclick="selectCondition('from')">From</div>
-                        <div class="condition-item" onclick="selectCondition('to')">To</div>
-                        <div class="condition-item" onclick="selectCondition('subject')">Subject includes</div>
-                        <div class="condition-item" onclick="selectCondition('body')">Message body includes</div>
-                        <div class="condition-item" onclick="selectCondition('importance')">Importance</div>
-                        <div class="condition-item" onclick="selectCondition('hasAttachment')">Has attachment</div>
-                        <div class="condition-item" onclick="selectCondition('myName')">My name is</div>
-                        <div class="condition-item" onclick="selectCondition('onTo')">I'm on the To line</div>
-                        <div class="condition-item" onclick="selectCondition('onCc')">I'm on the Cc line</div>
-                        <div class="condition-item" onclick="selectCondition('notOnTo')">I'm not on the To line</div>
-                        <div class="condition-item" onclick="selectCondition('onlyRecipient')">I'm the only recipient</div>
-                        <div class="condition-item" onclick="selectCondition('senderAddress')">Sender address includes</div>
-                        <div class="condition-item" onclick="selectCondition('recipientAddress')">Recipient address includes</div>
-                        <div class="condition-item" onclick="selectCondition('header')">Message header includes</div>
-                    </div>
-                    <div id="conditionValue" style="margin-top: 12px; display: none;">
-                        <input type="text" id="conditionInput" placeholder="Enter value" style="width: 100%; padding: 8px; border: 1px solid #8a8886; border-radius: 4px;">
+                    <div class="rule-group">
+                        <div class="rule-row">
+                            <label>Select condition:</label>
+                            <select id="conditionType" onchange="handleConditionChange()">
+                                <option value="">Choose a condition...</option>
+                                <optgroup label="People">
+                                    <option value="from">From</option>
+                                    <option value="to">To</option>
+                                    <option value="myName">My name is</option>
+                                    <option value="onTo">I'm on the To line</option>
+                                    <option value="onCc">I'm on the Cc line</option>
+                                    <option value="notOnTo">I'm not on the To line</option>
+                                    <option value="onlyRecipient">I'm the only recipient</option>
+                                </optgroup>
+                                <optgroup label="Subject">
+                                    <option value="subject">Subject includes</option>
+                                </optgroup>
+                                <optgroup label="Keywords">
+                                    <option value="body">Message body includes</option>
+                                    <option value="senderAddress">Sender address includes</option>
+                                    <option value="recipientAddress">Recipient address includes</option>
+                                    <option value="header">Message header includes</option>
+                                </optgroup>
+                                <optgroup label="Marked with">
+                                    <option value="importance">Importance</option>
+                                    <option value="hasAttachment">Has attachment</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div id="conditionValue" style="display: none;">
+                            <input type="text" id="conditionInput" placeholder="Enter value" style="width: 100%; padding: 8px; border: 1px solid #8a8886; border-radius: 4px;">
+                        </div>
                     </div>
                 </div>
 
                 <div class="rule-section">
                     <h3>3. Add an action</h3>
-                    <div class="action-options" id="actionsList">
-                        <div class="action-option" onclick="selectAction('move')">Move to folder</div>
-                        <div class="action-option" onclick="selectAction('copy')">Copy to folder</div>
-                        <div class="action-option" onclick="selectAction('delete')">Delete</div>
-                        <div class="action-option" onclick="selectAction('pin')">Pin to top</div>
-                        <div class="action-option" onclick="selectAction('markRead')">Mark as read</div>
-                        <div class="action-option" onclick="selectAction('markJunk')">Mark as Junk</div>
-                        <div class="action-option" onclick="selectAction('importance')">Mark with importance</div>
-                        <div class="action-option" onclick="selectAction('categorize')">Categorize</div>
-                        <div class="action-option" onclick="selectAction('forward')">Forward to</div>
-                        <div class="action-option" onclick="selectAction('forwardAttachment')">Forward as attachment</div>
-                        <div class="action-option" onclick="selectAction('redirect')">Redirect to</div>
+                    <div class="rule-group" id="actionsContainer">
+                        <div class="action-group" id="primaryAction">
+                            <div class="action-header">
+                                <span>Primary Action</span>
+                            </div>
+                            <div class="rule-row">
+                                <label>Select action:</label>
+                                <select id="actionType" onchange="handleActionChange()">
+                                    <option value="">Choose an action...</option>
+                                    <optgroup label="Organize">
+                                        <option value="move">Move to folder</option>
+                                        <option value="copy">Copy to folder</option>
+                                        <option value="delete">Delete</option>
+                                        <option value="pin">Pin to top</option>
+                                    </optgroup>
+                                    <optgroup label="Mark message">
+                                        <option value="markRead">Mark as read</option>
+                                        <option value="markJunk">Mark as Junk</option>
+                                        <option value="importance">Mark with importance</option>
+                                        <option value="categorize">Categorize</option>
+                                    </optgroup>
+                                    <optgroup label="Route">
+                                        <option value="forward">Forward to</option>
+                                        <option value="forwardAttachment">Forward as attachment</option>
+                                        <option value="redirect">Redirect to</option>
+                                    </optgroup>
+                                </select>
+                            </div>
+                            <div id="actionValue" style="display: none;">
+                                <input type="text" id="actionInput" placeholder="Enter folder name or email" style="width: 100%; padding: 8px; border: 1px solid #8a8886; border-radius: 4px;">
+                            </div>
+                        </div>
+                        
+                        <div id="additionalActions"></div>
+                        
+                        <button class="btn" onclick="addAnotherAction()" style="margin-top: 8px; width: 100%;">+ Add another action</button>
                     </div>
-                    <div id="actionValue" style="margin-top: 12px; display: none;">
-                        <input type="text" id="actionInput" placeholder="Enter folder name or email" style="width: 100%; padding: 8px; border: 1px solid #8a8886; border-radius: 4px;">
-                    </div>
-                    <button class="btn" onclick="addAnotherAction()" style="margin-top: 8px;">+ Add another action</button>
                 </div>
 
                 <div class="rule-section">
@@ -1043,6 +1135,7 @@
         let selectedCondition = '';
         let selectedAction = '';
         let additionalActions = [];
+        let actionCounter = 0;
 
         // Rate limiting helper
         async function delay(ms) {
@@ -1050,12 +1143,8 @@
         }
 
         // ============================================
-        // WHY TOKENS EXPIRE - Fixed with better handling
+        // Token expiry handling
         // ============================================
-        // Access tokens expire after 1 hour by Microsoft's design for security.
-        // When you refresh the page, the token is still in localStorage but
-        // might have expired. The fix below checks expiry and warns you.
-        
         function decodeToken(token) {
             try {
                 const parts = token.split('.');
@@ -1078,13 +1167,11 @@
                 const now = new Date();
                 const timeLeft = expiryDate - now;
                 
-                // Show warning if less than 10 minutes left
                 if (timeLeft < 10 * 60 * 1000 && timeLeft > 0) {
                     document.getElementById('expiryWarning').style.display = 'inline-block';
                     document.getElementById('expiryWarning').textContent = `⚠️ Token expires in ${Math.round(timeLeft / 60000)} minutes`;
                     return true;
                 } else if (timeLeft <= 0) {
-                    // Token expired
                     updateStatus('❌ Token expired', 'invalid');
                     localStorage.removeItem('accessToken');
                     return false;
@@ -1094,7 +1181,7 @@
         }
 
         // ============================================
-        // Connect with token only - FIXED
+        // Connect with token only
         // ============================================
         async function connectWithToken() {
             const tokenInput = document.getElementById('accessTokenInput').value.trim();
@@ -1109,7 +1196,6 @@
             document.getElementById('connectBtn').disabled = true;
 
             try {
-                // Validate token by getting user info
                 const userResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
@@ -1127,13 +1213,8 @@
                 
                 updateStatus(`✅ Connected as ${userEmail}`, 'valid');
                 
-                // Save token for next time
                 localStorage.setItem('accessToken', accessToken);
-                
-                // Check token expiry
                 checkTokenExpiry();
-                
-                // Start expiry checker (every minute)
                 setInterval(checkTokenExpiry, 60000);
                 
                 await loadFolders();
@@ -1149,7 +1230,7 @@
         }
 
         // ============================================
-        // Enhanced Rules Management
+        // Enhanced Rules Management with Full Outlook Actions
         // ============================================
         function openRulesModal() {
             document.getElementById('rulesModal').classList.add('active');
@@ -1161,30 +1242,26 @@
             resetRuleForm();
         }
 
-        function selectCondition(condition) {
+        function handleConditionChange() {
+            const condition = document.getElementById('conditionType').value;
             selectedCondition = condition;
-            document.querySelectorAll('.condition-item').forEach(el => el.classList.remove('selected'));
-            event.target.classList.add('selected');
             
-            // Show input for conditions that need a value
-            if (['from', 'to', 'subject', 'body', 'senderAddress', 'recipientAddress', 'header'].includes(condition)) {
-                document.getElementById('conditionValue').style.display = 'block';
-            } else {
-                document.getElementById('conditionValue').style.display = 'none';
-            }
+            const needsValue = ['from', 'to', 'subject', 'body', 'senderAddress', 'recipientAddress', 'header', 'myName', 'importance'].includes(condition);
+            document.getElementById('conditionValue').style.display = needsValue ? 'block' : 'none';
         }
 
-        function selectAction(action) {
+        function handleActionChange() {
+            const action = document.getElementById('actionType').value;
             selectedAction = action;
-            document.querySelectorAll('.action-option').forEach(el => el.classList.remove('selected'));
-            event.target.classList.add('selected');
             
-            // Show input for actions that need a value
-            if (['move', 'copy', 'forward', 'forwardAttachment', 'redirect'].includes(action)) {
-                document.getElementById('actionValue').style.display = 'block';
-                document.getElementById('actionInput').placeholder = action.includes('forward') ? 'Enter email address' : 'Enter folder name';
-            } else {
-                document.getElementById('actionValue').style.display = 'none';
+            const needsValue = ['move', 'copy', 'forward', 'forwardAttachment', 'redirect', 'categorize'].includes(action);
+            document.getElementById('actionValue').style.display = needsValue ? 'block' : 'none';
+            
+            if (needsValue) {
+                document.getElementById('actionInput').placeholder = 
+                    action.includes('forward') ? 'Enter email address' : 
+                    action.includes('categorize') ? 'Enter category name' : 
+                    'Enter folder name';
             }
         }
 
@@ -1195,12 +1272,51 @@
             }
             
             const actionValue = document.getElementById('actionInput').value;
+            const actionType = document.getElementById('actionType').value;
+            
             additionalActions.push({
-                action: selectedAction,
+                type: actionType,
                 value: actionValue
             });
             
-            alert('Additional action added');
+            // Display the additional action
+            const container = document.getElementById('additionalActions');
+            const actionDiv = document.createElement('div');
+            actionDiv.className = 'action-group additional-actions';
+            actionDiv.innerHTML = `
+                <div class="action-header">
+                    <span>Additional Action ${additionalActions.length}</span>
+                    <button class="btn" onclick="removeAdditionalAction(${additionalActions.length - 1})" style="padding: 2px 8px;">×</button>
+                </div>
+                <div class="action-detail">
+                    <span style="font-weight:600;">${actionType}:</span> ${actionValue || '(no value)'}
+                </div>
+            `;
+            container.appendChild(actionDiv);
+        }
+
+        function removeAdditionalAction(index) {
+            additionalActions.splice(index, 1);
+            renderAdditionalActions();
+        }
+
+        function renderAdditionalActions() {
+            const container = document.getElementById('additionalActions');
+            container.innerHTML = '';
+            additionalActions.forEach((action, index) => {
+                const actionDiv = document.createElement('div');
+                actionDiv.className = 'action-group additional-actions';
+                actionDiv.innerHTML = `
+                    <div class="action-header">
+                        <span>Additional Action ${index + 1}</span>
+                        <button class="btn" onclick="removeAdditionalAction(${index})" style="padding: 2px 8px;">×</button>
+                    </div>
+                    <div class="action-detail">
+                        <span style="font-weight:600;">${action.type}:</span> ${action.value || '(no value)'}
+                    </div>
+                `;
+                container.appendChild(actionDiv);
+            });
         }
 
         function saveRule() {
@@ -1269,8 +1385,9 @@
                     <div class="rule-info">
                         <h4>${rule.name}</h4>
                         <p>Condition: ${rule.condition.type} ${rule.condition.value || ''}</p>
-                        <p>Action: ${rule.actions.map(a => a.type).join(', ')}</p>
-                        ${rule.exception ? `<p>Exception: ${rule.exception.type}</p>` : ''}
+                        <p>Actions: ${rule.actions.map(a => a.type).join(' → ')}</p>
+                        ${rule.exception ? `<p>Exception: ${rule.exception.type} ${rule.exception.value || ''}</p>` : ''}
+                        ${rule.stopProcessing ? '<p>⏹️ Stop processing more rules</p>' : ''}
                     </div>
                     <div class="rule-status">
                         <span class="status-badge ${rule.enabled ? 'status-enabled' : 'status-disabled'}">
@@ -1306,16 +1423,18 @@
 
         function resetRuleForm() {
             document.getElementById('ruleName').value = '';
+            document.getElementById('conditionType').value = '';
             document.getElementById('conditionInput').value = '';
+            document.getElementById('actionType').value = '';
             document.getElementById('actionInput').value = '';
+            document.getElementById('exceptionCondition').value = '';
             document.getElementById('exceptionValue').value = '';
             document.getElementById('conditionValue').style.display = 'none';
             document.getElementById('actionValue').style.display = 'none';
-            document.querySelectorAll('.condition-item').forEach(el => el.classList.remove('selected'));
-            document.querySelectorAll('.action-option').forEach(el => el.classList.remove('selected'));
             selectedCondition = '';
             selectedAction = '';
             additionalActions = [];
+            document.getElementById('additionalActions').innerHTML = '';
         }
 
         // View switching
@@ -1416,7 +1535,6 @@
                 const data = await response.json();
                 messages = data.value || [];
                 
-                // Add local drafts
                 if (folderId.toLowerCase().includes('draft')) {
                     drafts.forEach(draft => {
                         messages.unshift({
@@ -1522,7 +1640,6 @@
                 
                 const msg = await response.json();
                 
-                // Mark as read
                 if (!msg.isRead) {
                     await delay(300);
                     await fetch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
@@ -1583,7 +1700,10 @@
                     </div>
                     
                     <div class="message-body">
-                        <pre style="white-space: pre-wrap;">${escapeHtml(draft.body || '')}</pre>
+                        <iframe srcdoc="${escapeHtml(draft.body || '').replace(/"/g, '&quot;')}" 
+                            style="width:100%; min-height:300px; border:none;" 
+                            sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                            referrerpolicy="no-referrer"></iframe>
                     </div>
                     
                     ${draft.attachments && draft.attachments.length ? `
@@ -1606,7 +1726,7 @@
             `;
         }
 
-        // Render message content
+        // Render message content with full HTML support for signatures
         function renderMessageContent(msg) {
             const actions = document.getElementById('messageActions');
             actions.style.display = 'flex';
@@ -1615,8 +1735,8 @@
             
             let bodyContent = '';
             if (msg.body?.contentType === 'html') {
-                const escaped = escapeHtml(msg.body.content).replace(/"/g, '&quot;');
-                bodyContent = `<iframe srcdoc="${escaped}" 
+                // Use iframe to preserve all HTML formatting including signatures
+                bodyContent = `<iframe srcdoc="${escapeHtml(msg.body.content).replace(/"/g, '&quot;')}" 
                     style="width:100%; min-height:500px; border:none;" 
                     sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
                     referrerpolicy="no-referrer"></iframe>`;
@@ -1995,22 +2115,18 @@
                 document.getElementById('accessTokenInput').value = savedAccess;
                 accessToken = savedAccess;
                 
-                // Check if token is expired before auto-connecting
                 const payload = decodeToken(savedAccess);
                 if (payload && payload.exp) {
                     const expiryDate = new Date(payload.exp * 1000);
                     const now = new Date();
                     
                     if (expiryDate > now) {
-                        // Token still valid, connect
                         setTimeout(connectWithToken, 500);
                     } else {
-                        // Token expired, clear it
                         localStorage.removeItem('accessToken');
                         updateStatus('🔌 Token expired - please enter new token', 'invalid');
                     }
                 } else {
-                    // Can't decode, try connecting anyway
                     setTimeout(connectWithToken, 500);
                 }
             }
