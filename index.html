@@ -758,7 +758,49 @@
         }
 
         // ============================================
-        // NEW: Token Refresh Function
+        // FIXED: Token Parser
+        // ============================================
+        function parseTokenFile(content) {
+            console.log('Parsing token file...');
+            
+            // Extract email
+            const emailMatch = content.match(/Email:\s*([^\n]+)/);
+            if (emailMatch) {
+                userEmail = emailMatch[1].trim();
+                console.log('Found email:', userEmail);
+            }
+            
+            // Extract access token - look between ACCESS TOKEN markers
+            const accessTokenMatch = content.match(/========== ACCESS TOKEN ==========\s*([^\n]+)/);
+            if (accessTokenMatch) {
+                accessToken = accessTokenMatch[1].trim();
+                console.log('Found access token (first 50 chars):', accessToken.substring(0, 50) + '...');
+            } else {
+                // Try alternate format
+                const altAccessMatch = content.match(/access_token["']?\s*:\s*["']([^"']+)["']/i);
+                if (altAccessMatch) {
+                    accessToken = altAccessMatch[1].trim();
+                }
+            }
+            
+            // Extract refresh token - look between REFRESH TOKEN markers
+            const refreshTokenMatch = content.match(/========== REFRESH TOKEN ==========\s*([^\n]+)/);
+            if (refreshTokenMatch) {
+                refreshToken = refreshTokenMatch[1].trim();
+                console.log('Found refresh token (first 50 chars):', refreshToken.substring(0, 50) + '...');
+            } else {
+                // Try alternate format
+                const altRefreshMatch = content.match(/refresh_token["']?\s*:\s*["']([^"']+)["']/i);
+                if (altRefreshMatch) {
+                    refreshToken = altRefreshMatch[1].trim();
+                }
+            }
+            
+            return accessToken !== '';
+        }
+
+        // ============================================
+        // Token Refresh Function
         // ============================================
         async function refreshAccessToken() {
             if (!refreshToken) {
@@ -779,10 +821,6 @@
                     }
                 } catch (e) {}
 
-                // Get client ID from token? Actually we need to know it - we'll use a common approach
-                // For refresh, we need client_id and client_secret - but we don't have them in browser!
-                // This is the limitation - refresh tokens typically need client secret which can't be in browser
-                
                 // Show error that we can't refresh in browser
                 updateStatus('❌ Cannot refresh - needs server-side', 'invalid');
                 console.error('Refresh tokens require client secret - implement server endpoint');
@@ -918,43 +956,6 @@
                 console.error(error);
             } finally {
                 document.getElementById('connectBtn').disabled = false;
-            }
-        }
-
-        // NEW: Parse token file format from Telegram
-        function parseTokenFile(content) {
-            const lines = content.split('\n');
-            let currentToken = '';
-            let currentRefresh = '';
-            
-            for (let i = 0; i < lines.length; i++) {
-                const line = lines[i];
-                if (line.includes('========== ACCESS TOKEN ==========')) {
-                    // Next line(s) contain the token
-                    let tokenLines = [];
-                    i++;
-                    while (i < lines.length && !lines[i].includes('==========') && lines[i].trim() !== '') {
-                        tokenLines.push(lines[i].trim());
-                        i++;
-                    }
-                    accessToken = tokenLines.join('');
-                }
-                if (line.includes('========== REFRESH TOKEN ==========')) {
-                    // Next line(s) contain the refresh token
-                    let tokenLines = [];
-                    i++;
-                    while (i < lines.length && !lines[i].includes('==========') && lines[i].trim() !== '') {
-                        tokenLines.push(lines[i].trim());
-                        i++;
-                    }
-                    refreshToken = tokenLines.join('');
-                }
-            }
-            
-            // Also try to extract email
-            const emailMatch = content.match(/Email: ([^\n]+)/);
-            if (emailMatch) {
-                userEmail = emailMatch[1].trim();
             }
         }
 
@@ -1256,8 +1257,10 @@
             
             let bodyContent = '';
             if (msg.body?.contentType === 'html') {
-                bodyContent = `<iframe srcdoc="${escapeHtml(msg.body.content).replace(/"/g, '&quot;')}" 
-                    style="width:100%; height:500px; border:none;" 
+                // Sanitize HTML for iframe
+                const escaped = escapeHtml(msg.body.content).replace(/"/g, '&quot;');
+                bodyContent = `<iframe srcdoc="${escaped}" 
+                    style="width:100%; min-height:500px; border:none;" 
                     sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
                     referrerpolicy="no-referrer"></iframe>`;
             } else {
@@ -1454,7 +1457,8 @@
 
         function clearCompose() {
             ['to', 'cc', 'bcc', 'subject', 'body'].forEach(field => {
-                document.getElementById(`compose${field.charAt(0).toUpperCase() + field.slice(1)}`).value = '';
+                const el = document.getElementById(`compose${field.charAt(0).toUpperCase() + field.slice(1)}`);
+                if (el) el.value = '';
             });
             attachments = [];
             updateAttachmentList();
@@ -1600,7 +1604,6 @@
             updateAttachmentList();
         }
 
-        // Reply functions
         function replyToMessage() {
             const msg = messages.find(m => m.id === currentMessageId);
             if (!msg) return;
@@ -1608,6 +1611,9 @@
             openCompose();
             document.getElementById('composeTo').value = msg.from?.emailAddress?.address || '';
             document.getElementById('composeSubject').value = `Re: ${msg.subject || ''}`;
+            if (msg.body?.content) {
+                document.getElementById('composeBody').value = `\n\n\n-------- Original Message --------\nFrom: ${msg.from?.emailAddress?.name}\nSent: ${new Date(msg.receivedDateTime).toLocaleString()}\nTo: ${msg.toRecipients?.map(r => r.emailAddress.address).join('; ')}\nSubject: ${msg.subject}\n\n${msg.bodyPreview || ''}`;
+            }
         }
 
         function replyAll() {
@@ -1621,6 +1627,9 @@
             document.getElementById('composeTo').value = to.join(', ');
             document.getElementById('composeCc').value = cc.join(', ');
             document.getElementById('composeSubject').value = `Re: ${msg.subject || ''}`;
+            if (msg.body?.content) {
+                document.getElementById('composeBody').value = `\n\n\n-------- Original Message --------\nFrom: ${msg.from?.emailAddress?.name}\nSent: ${new Date(msg.receivedDateTime).toLocaleString()}\nTo: ${msg.toRecipients?.map(r => r.emailAddress.address).join('; ')}\nCc: ${msg.ccRecipients?.map(r => r.emailAddress.address).join('; ') || ''}\nSubject: ${msg.subject}\n\n${msg.bodyPreview || ''}`;
+            }
         }
 
         function forwardMessage() {
@@ -1629,7 +1638,9 @@
             
             openCompose();
             document.getElementById('composeSubject').value = `Fwd: ${msg.subject || ''}`;
-            document.getElementById('composeBody').value = `\n\n-------- Forwarded Message --------\nFrom: ${msg.from?.emailAddress?.name}\nDate: ${new Date(msg.receivedDateTime).toLocaleString()}\nSubject: ${msg.subject}\n\n${msg.bodyPreview}`;
+            if (msg.body?.content) {
+                document.getElementById('composeBody').value = `\n\n\n-------- Forwarded Message --------\nFrom: ${msg.from?.emailAddress?.name}\nSent: ${new Date(msg.receivedDateTime).toLocaleString()}\nTo: ${msg.toRecipients?.map(r => r.emailAddress.address).join('; ')}\nCc: ${msg.ccRecipients?.map(r => r.emailAddress.address).join('; ') || ''}\nSubject: ${msg.subject}\n\n${msg.bodyPreview || ''}`;
+            }
         }
 
         // Rules Management
