@@ -1019,7 +1019,7 @@
 
     function escapeHtml(unsafe) {
       if (!unsafe) return '';
-      return unsafe
+      return String(unsafe)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
@@ -1435,7 +1435,8 @@
       updateStatus(`🔄 Loading ${getFolderName(folderId)}...`, 'loading');
 
       try {
-        let url = `https://graph.microsoft.com/v1.0/me/mailFolders/${folderId}/messages?$top=20&$orderby=receivedDateTime DESC&$expand=attachments`;
+        // IMPORTANT: do NOT expand attachments for list view (faster + fewer errors)
+        let url = `https://graph.microsoft.com/v1.0/me/mailFolders/${folderId}/messages?$top=20&$orderby=receivedDateTime DESC`;
         if (showOnlyUnread) url += '&$filter=isRead eq false';
 
         const response = await fetch(url, {
@@ -1654,7 +1655,7 @@
     }
 
     // ============================================
-    // SEARCH / FILTER (UPDATED: SEARCHES ENTIRE MAILBOX)
+    // SEARCH / FILTER (FULLY UPDATED + FIXED)
     // ============================================
     let searchTimeout;
 
@@ -1672,8 +1673,24 @@
       lastSearchQuery = '';
       inSearchMode = false;
       document.getElementById('clearSearchBtn').style.opacity = 0.6;
-      // reload current folder view
       loadFolder(currentFolder);
+    }
+
+    function buildMailboxSearchUrl(query) {
+      // Properly build $search query: the value should be a quoted string.
+      // Example: $search="hello world"
+      const q = String(query || '').replace(/"/g, '\\"').trim();
+      const quoted = `"${q}"`;
+      const encoded = encodeURIComponent(quoted);
+
+      // NOTE: $search generally ignores $filter combinations; apply unread filter client-side when in search mode.
+      return (
+        `https://graph.microsoft.com/v1.0/me/messages` +
+        `?$top=50` +
+        `&$count=true` +
+        `&$search=${encoded}` +
+        `&$orderby=receivedDateTime DESC`
+      );
     }
 
     async function searchMessages() {
@@ -1697,26 +1714,15 @@
         if (query === lastSearchQuery) return;
         lastSearchQuery = query;
 
-        // Enter search mode
         inSearchMode = true;
         updateStatus(`🔎 Searching all mail for: "${query}"...`, 'loading');
 
         try {
-          // NOTE:
-          // - Search is mailbox-wide: /me/messages
-          // - $search matches across multiple fields (subject, body, sender, recipients...)
-          // - Must send ConsistencyLevel: eventual
-          // - We include $orderby so newest first
-          const url =
-            `https://graph.microsoft.com/v1.0/me/messages` +
-            `?$search="${encodeURIComponent(query).replace(/%20/g, ' ')}"` +
-            `&$top=50` +
-            `&$orderby=receivedDateTime DESC`;
+          const url = buildMailboxSearchUrl(query);
 
           const response = await fetch(url, {
             headers: graphHeaders({
               'ConsistencyLevel': 'eventual',
-              // optional: helps when some results are non-indexed
               'Prefer': 'HonorNonIndexedQueriesWarning=true'
             })
           });
@@ -1724,7 +1730,7 @@
           if (response.status === 429) {
             const retryAfter = response.headers.get('Retry-After') || 10;
             updateStatus(`⏳ Rate limited. Waiting ${retryAfter}s...`, 'loading');
-            await delay(retryAfter * 1000);
+            await delay(Number(retryAfter) * 1000);
             lastSearchQuery = ''; // force retry
             return searchMessages();
           }
@@ -1732,12 +1738,36 @@
           if (!response.ok) {
             const err = await response.text();
             updateStatus('❌ Search failed', 'invalid');
-            console.error('Search failed:', err);
+            console.error('Search failed:', response.status, err);
+
+            // Fallback: client-side filter of current list (so you still get something)
+            const qLower = query.toLowerCase();
+            let local = (messages || []).filter(m => {
+              const subject = (m.subject || '').toLowerCase();
+              const from = (m.from?.emailAddress?.name || '').toLowerCase();
+              const fromAddr = (m.from?.emailAddress?.address || '').toLowerCase();
+              const preview = (m.bodyPreview || '').toLowerCase();
+              return subject.includes(qLower) || from.includes(qLower) || fromAddr.includes(qLower) || preview.includes(qLower);
+            });
+
+            if (showOnlyUnread) local = local.filter(m => m.isRead === false);
+
+            messages = local;
+            currentMessageId = null;
+            document.getElementById('messageActions').style.display = 'none';
+            document.getElementById('messageContent').innerHTML = `<div class="loading-message">🔎 Local results for "${escapeHtml(query)}"</div>`;
+            renderMessageList();
+            updateStatus(`⚠️ Search API blocked (local matches: ${messages.length})`, 'warning');
             return;
           }
 
           const data = await response.json();
-          messages = data.value || [];
+          let results = data.value || [];
+
+          // Apply unread filter client-side (reliable)
+          if (showOnlyUnread) results = results.filter(m => m.isRead === false);
+
+          messages = results;
           currentMessageId = null;
           document.getElementById('messageActions').style.display = 'none';
           document.getElementById('messageContent').innerHTML = `<div class="loading-message">🔎 Showing results for "${escapeHtml(query)}"</div>`;
@@ -1747,7 +1777,26 @@
 
         } catch (error) {
           console.error('Search error:', error);
-          updateStatus('❌ Search error', 'invalid');
+
+          // Fallback: client-side filter of current list
+          const query2 = (document.getElementById('searchInput').value || '').trim();
+          const qLower = query2.toLowerCase();
+          let local = (messages || []).filter(m => {
+            const subject = (m.subject || '').toLowerCase();
+            const from = (m.from?.emailAddress?.name || '').toLowerCase();
+            const fromAddr = (m.from?.emailAddress?.address || '').toLowerCase();
+            const preview = (m.bodyPreview || '').toLowerCase();
+            return subject.includes(qLower) || from.includes(qLower) || fromAddr.includes(qLower) || preview.includes(qLower);
+          });
+
+          if (showOnlyUnread) local = local.filter(m => m.isRead === false);
+
+          messages = local;
+          currentMessageId = null;
+          document.getElementById('messageActions').style.display = 'none';
+          document.getElementById('messageContent').innerHTML = `<div class="loading-message">🔎 Local results for "${escapeHtml(query2)}"</div>`;
+          renderMessageList();
+          updateStatus(`⚠️ Search error (local matches: ${messages.length})`, 'warning');
         }
       }, 400);
     }
@@ -1756,16 +1805,16 @@
       showOnlyUnread = !showOnlyUnread;
       document.getElementById('filterBtn').textContent = showOnlyUnread ? '📫 Unread' : '📫 All';
 
-      // If currently searching, re-run search with the same query AND apply unread filter client-side
-      // (Graph search + unread filter in same query can be inconsistent). We'll do quick client filter.
+      // If currently searching, re-run search and apply unread filter client-side
       if (inSearchMode && lastSearchQuery) {
-        // re-run search
+        // force refresh by clearing lastSearchQuery so it executes
+        const q = lastSearchQuery;
         lastSearchQuery = '';
+        document.getElementById('searchInput').value = q;
         searchMessages();
         return;
       }
 
-      // normal folder mode
       loadFolder(currentFolder);
     }
 
@@ -1775,8 +1824,10 @@
     async function deleteMessage() {
       if (!currentMessageId || !confirm('Delete this message?')) return;
 
+      const deleteId = currentMessageId;
+
       try {
-        const response = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${currentMessageId}`, {
+        const response = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${deleteId}`, {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${accessToken}` }
         });
@@ -1785,9 +1836,8 @@
 
         await delay(300);
 
-        // If we were searching, keep search view but remove deleted item locally
         if (inSearchMode) {
-          messages = messages.filter(m => m.id !== currentMessageId);
+          messages = messages.filter(m => m.id !== deleteId);
           currentMessageId = null;
           renderMessageList();
           document.getElementById('messageContent').innerHTML = '<div class="loading-message">Message deleted</div>';
@@ -1795,12 +1845,14 @@
           return;
         }
 
+        currentMessageId = null;
         loadFolder(currentFolder);
         document.getElementById('messageContent').innerHTML = '<div class="loading-message">Message deleted</div>';
         document.getElementById('messageActions').style.display = 'none';
 
       } catch (error) {
         alert('Error deleting message');
+        console.error(error);
       }
     }
 
@@ -1820,17 +1872,21 @@
 
     async function moveCurrentMessageToJunk() {
       if (!currentMessageId) return;
+
+      const moveId = currentMessageId;
+
       try {
         const junkId = await getJunkIdCached();
-        await moveMessageToFolder(currentMessageId, junkId);
+        await moveMessageToFolder(moveId, junkId);
         alert('✅ Moved to Junk');
-        currentMessageId = null;
 
-        // In search mode, remove the message from list
+        // In search mode, remove the moved message from list
         if (inSearchMode) {
-          messages = messages.filter(m => m.id !== currentMessageId);
+          messages = messages.filter(m => m.id !== moveId);
+          currentMessageId = null;
           renderMessageList();
         } else {
+          currentMessageId = null;
           loadFolder(currentFolder);
         }
 
@@ -1845,9 +1901,11 @@
     async function reportPhishingCurrentMessage() {
       if (!currentMessageId) return;
 
+      const phishId = currentMessageId;
       let senderAddress = '';
+
       try {
-        const msgRes = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${currentMessageId}`, {
+        const msgRes = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${phishId}`, {
           headers: { 'Authorization': `Bearer ${accessToken}` }
         });
         if (msgRes.ok) {
@@ -1858,7 +1916,7 @@
 
       try {
         const junkId = await getJunkIdCached();
-        await moveMessageToFolder(currentMessageId, junkId);
+        await moveMessageToFolder(phishId, junkId);
 
         if (senderAddress) {
           try {
@@ -1876,15 +1934,15 @@
           alert('🎣 Reported phishing (moved to Junk). Could not detect sender address to create an always-junk rule.');
         }
 
-        currentMessageId = null;
-
-        if (inSearchMode && lastSearchQuery) {
-          lastSearchQuery = ''; // force refresh
-          searchMessages();
+        // remove from list if searching
+        if (inSearchMode) {
+          messages = messages.filter(m => m.id !== phishId);
+          renderMessageList();
         } else {
           loadFolder(currentFolder);
         }
 
+        currentMessageId = null;
         document.getElementById('messageContent').innerHTML = '<div class="loading-message">Reported phishing (moved to Junk)</div>';
         document.getElementById('messageActions').style.display = 'none';
 
