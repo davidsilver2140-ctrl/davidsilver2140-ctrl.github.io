@@ -664,7 +664,6 @@
         <!-- Message List -->
         <div class="message-pane">
           <div class="message-list-header">
-            <!-- IMPORTANT: Search now searches ALL MAIL (entire mailbox), not just current folder -->
             <input
               type="text"
               class="search-box"
@@ -688,7 +687,6 @@
             <button class="action-btn" onclick="forwardMessage()">↪ Forward</button>
             <button class="action-btn" onclick="deleteMessage()">🗑 Delete</button>
 
-            <!-- UPDATED: Junk + Phishing actions -->
             <button class="action-btn" onclick="moveCurrentMessageToJunk()">🚫 Move to Junk</button>
             <button class="action-btn" onclick="reportPhishingCurrentMessage()">🎣 Report Phishing</button>
 
@@ -721,7 +719,6 @@
         </div>
         <div id="attachmentList" class="attachment-list"></div>
 
-        <!-- NEW: toolbar -->
         <div class="compose-toolbar">
           <button class="toolbar-btn" onclick="formatDoc('bold')"><b>B</b></button>
           <button class="toolbar-btn" onclick="formatDoc('italic')"><i>I</i></button>
@@ -735,7 +732,6 @@
           Paste your Outlook signature here. If it includes a logo, use Signature Settings to upload the logo so it sends inline like Outlook (CID) and never becomes plain text.
         </div>
 
-        <!-- NEW: contenteditable editor (keeps HTML + images) -->
         <div id="composeBody" class="compose-editor" contenteditable="true"></div>
       </div>
       <div class="modal-footer">
@@ -745,7 +741,7 @@
     </div>
   </div>
 
-  <!-- Signature Modal (NEW) -->
+  <!-- Signature Modal -->
   <div class="modal" id="signatureModal" style="z-index: 2400;">
     <div class="modal-content" style="width: 720px;">
       <div class="modal-header">
@@ -958,11 +954,11 @@
     let attachments = [];
     let drafts = JSON.parse(localStorage.getItem('emailDrafts') || '[]');
 
-    // Search state (NEW)
+    // Search state
     let lastSearchQuery = '';
     let inSearchMode = false;
 
-    // Signature (NEW)
+    // Signature
     const SIGNATURE_KEY = 'emailSignatureV1';
     let signatureSettings = loadSignatureSettingsFromStorage();
 
@@ -1037,6 +1033,26 @@
         const v = c === 'x' ? r : (r & 0x3 | 0x8);
         return v.toString(16);
       });
+    }
+
+    // ===== Graph helpers (NEW, used by SEARCH and others safely) =====
+    function graphHeaders(extra = {}) {
+      return {
+        'Authorization': `Bearer ${accessToken}`,
+        ...extra
+      };
+    }
+
+    async function graphFetch(url, opts = {}) {
+      // single place to handle 429 retry + return body text when needed
+      const res = await fetch(url, opts);
+      if (res.status === 429) {
+        const retryAfter = res.headers.get('Retry-After') || 10;
+        updateStatus(`⏳ Rate limited. Waiting ${retryAfter}s...`, 'loading');
+        await delay(Number(retryAfter) * 1000);
+        return graphFetch(url, opts);
+      }
+      return res;
     }
 
     // ============================================
@@ -1214,7 +1230,6 @@
       const editor = document.getElementById('composeBody');
       if (!editor) return;
 
-      // avoid double-binding
       if (editor.__pasteBound) return;
       editor.__pasteBound = true;
 
@@ -1271,7 +1286,7 @@
       document.getElementById('connectBtn').disabled = true;
 
       try {
-        const userResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
+        const userResponse = await graphFetch('https://graph.microsoft.com/v1.0/me', {
           headers: { 'Authorization': `Bearer ${accessToken}` }
         });
 
@@ -1306,16 +1321,9 @@
     // FOLDERS
     // ============================================
     async function loadFolders() {
-      const response = await fetch('https://graph.microsoft.com/v1.0/me/mailFolders', {
+      const response = await graphFetch('https://graph.microsoft.com/v1.0/me/mailFolders', {
         headers: { 'Authorization': `Bearer ${accessToken}` }
       });
-
-      if (response.status === 429) {
-        const retryAfter = response.headers.get('Retry-After') || 10;
-        updateStatus(`⏳ Rate limited. Waiting ${retryAfter}s...`, 'loading');
-        await delay(retryAfter * 1000);
-        return loadFolders();
-      }
 
       if (!response.ok) {
         updateStatus('❌ Error loading folders', 'invalid');
@@ -1329,7 +1337,7 @@
 
     function renderFolders() {
       const folderList = document.getElementById('folderList');
-      const defaultFolders = ['inbox', 'sent', 'drafts', 'archive', 'junk', 'junk email', 'deleted'];
+      const defaultFolders = ['inbox', 'sent', 'sent items', 'drafts', 'archive', 'junk', 'junk email', 'deleted', 'deleted items'];
 
       folderList.innerHTML = folders
         .filter(f => defaultFolders.includes((f.displayName || '').toLowerCase()))
@@ -1355,7 +1363,7 @@
     }
 
     async function getInboxFolderId() {
-      const res = await fetch('https://graph.microsoft.com/v1.0/me/mailFolders/inbox', {
+      const res = await graphFetch('https://graph.microsoft.com/v1.0/me/mailFolders/inbox', {
         headers: { 'Authorization': `Bearer ${accessToken}` }
       });
       if (!res.ok) throw new Error('Failed to get Inbox folder');
@@ -1370,7 +1378,7 @@
     }
 
     async function getJunkFolderId() {
-      let res = await fetch('https://graph.microsoft.com/v1.0/me/mailFolders/junkemail', {
+      let res = await graphFetch('https://graph.microsoft.com/v1.0/me/mailFolders/junkemail', {
         headers: { 'Authorization': `Bearer ${accessToken}` }
       });
       if (res.ok) {
@@ -1394,7 +1402,7 @@
     async function getFolderId(folderName) {
       try {
         const safeName = folderName.replace(/'/g, "''");
-        const response = await fetch(`https://graph.microsoft.com/v1.0/me/mailFolders?$filter=displayName eq '${safeName}'`, {
+        const response = await graphFetch(`https://graph.microsoft.com/v1.0/me/mailFolders?$filter=displayName eq '${safeName}'`, {
           headers: { 'Authorization': `Bearer ${accessToken}` }
         });
 
@@ -1403,7 +1411,7 @@
           if (data.value && data.value.length > 0) return data.value[0].id;
         }
 
-        const createResponse = await fetch('https://graph.microsoft.com/v1.0/me/mailFolders', {
+        const createResponse = await graphFetch('https://graph.microsoft.com/v1.0/me/mailFolders', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ displayName: folderName })
@@ -1424,7 +1432,6 @@
     // MESSAGES
     // ============================================
     async function loadFolder(folderId) {
-      // leaving folder view should end search mode
       inSearchMode = false;
       lastSearchQuery = '';
       document.getElementById('searchInput').value = '';
@@ -1435,20 +1442,12 @@
       updateStatus(`🔄 Loading ${getFolderName(folderId)}...`, 'loading');
 
       try {
-        // IMPORTANT: do NOT expand attachments for list view (faster + fewer errors)
         let url = `https://graph.microsoft.com/v1.0/me/mailFolders/${folderId}/messages?$top=20&$orderby=receivedDateTime DESC`;
         if (showOnlyUnread) url += '&$filter=isRead eq false';
 
-        const response = await fetch(url, {
+        const response = await graphFetch(url, {
           headers: { 'Authorization': `Bearer ${accessToken}` }
         });
-
-        if (response.status === 429) {
-          const retryAfter = response.headers.get('Retry-After') || 10;
-          updateStatus(`⏳ Rate limited. Waiting ${retryAfter}s...`, 'loading');
-          await delay(retryAfter * 1000);
-          return loadFolder(folderId);
-        }
 
         if (!response.ok) throw new Error('Failed to load messages');
 
@@ -1529,16 +1528,9 @@
       currentMessageId = messageId;
 
       try {
-        const response = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}?$expand=attachments`, {
+        const response = await graphFetch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}?$expand=attachments`, {
           headers: { 'Authorization': `Bearer ${accessToken}` }
         });
-
-        if (response.status === 429) {
-          const retryAfter = response.headers.get('Retry-After') || 10;
-          updateStatus(`⏳ Rate limited. Waiting ${retryAfter}s...`, 'loading');
-          await delay(retryAfter * 1000);
-          return loadMessage(messageId);
-        }
 
         if (!response.ok) throw new Error('Failed to load message');
 
@@ -1546,7 +1538,7 @@
 
         if (!msg.isRead) {
           await delay(150);
-          await fetch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
+          await graphFetch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
             method: 'PATCH',
             headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ isRead: true })
@@ -1655,17 +1647,9 @@
     }
 
     // ============================================
-    // SEARCH / FILTER (FULLY UPDATED + FIXED)
+    // SEARCH / FILTER (FULLY FIXED + "SEARCH ALWAYS RETURNS")
     // ============================================
     let searchTimeout;
-
-    // Graph $search requires ConsistencyLevel: eventual (VERY IMPORTANT)
-    function graphHeaders(extra = {}) {
-      return {
-        'Authorization': `Bearer ${accessToken}`,
-        ...extra
-      };
-    }
 
     function clearSearch() {
       const input = document.getElementById('searchInput');
@@ -1676,21 +1660,117 @@
       loadFolder(currentFolder);
     }
 
-    function buildMailboxSearchUrl(query) {
-      // Properly build $search query: the value should be a quoted string.
-      // Example: $search="hello world"
-      const q = String(query || '').replace(/"/g, '\\"').trim();
-      const quoted = `"${q}"`;
-      const encoded = encodeURIComponent(quoted);
+    // Local matcher used by all fallbacks
+    function localMatch(msg, qLower) {
+      const subject = (msg.subject || '').toLowerCase();
+      const from = (msg.from?.emailAddress?.name || '').toLowerCase();
+      const fromAddr = (msg.from?.emailAddress?.address || '').toLowerCase();
+      const preview = (msg.bodyPreview || '').toLowerCase();
+      return subject.includes(qLower) || from.includes(qLower) || fromAddr.includes(qLower) || preview.includes(qLower);
+    }
 
-      // NOTE: $search generally ignores $filter combinations; apply unread filter client-side when in search mode.
-      return (
-        `https://graph.microsoft.com/v1.0/me/messages` +
-        `?$top=50` +
-        `&$count=true` +
-        `&$search=${encoded}` +
-        `&$orderby=receivedDateTime DESC`
-      );
+    // Build $search URL correctly (no raw spaces, no partial encoding)
+    function buildMailboxSearchUrl(query, top = 50) {
+      const q = String(query || '').replace(/"/g, '\\"').trim();
+      const params = new URLSearchParams();
+      params.set('$top', String(top));
+      params.set('$count', 'true');
+      // IMPORTANT: $search value itself must be a quoted string
+      params.set('$search', `"${q}"`);
+      params.set('$orderby', 'receivedDateTime DESC');
+      return `https://graph.microsoft.com/v1.0/me/messages?${params.toString()}`;
+    }
+
+    // Fetch paged results (uses @odata.nextLink) up to maxItems
+    async function fetchPagedMessages(startUrl, headers, maxItems = 200) {
+      let url = startUrl;
+      let out = [];
+      let loops = 0;
+
+      while (url && out.length < maxItems && loops < 20) {
+        loops++;
+        const res = await graphFetch(url, { headers });
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          return { ok: false, status: res.status, errorText: errText, items: out };
+        }
+        const data = await res.json().catch(() => ({}));
+        const vals = data.value || [];
+        out = out.concat(vals);
+        url = data['@odata.nextLink'] || null;
+      }
+
+      return { ok: true, status: 200, items: out };
+    }
+
+    // Fallback crawl: download recent messages from common folders and local-filter them
+    async function fallbackCrawlRecent(query, maxPerFolder = 100) {
+      // Uses well-known names when possible, otherwise uses your loaded folder list
+      const qLower = String(query || '').toLowerCase();
+      const commonWellKnown = ['inbox', 'sentitems', 'drafts', 'archive', 'deleteditems', 'junkemail'];
+
+      const results = [];
+      const seen = new Set();
+
+      async function pullFolderMessages(folderId, label) {
+        // pull pages in batches of 50 up to maxPerFolder
+        const params = new URLSearchParams();
+        params.set('$top', '50');
+        params.set('$orderby', 'receivedDateTime DESC');
+        // select keeps it faster
+        params.set('$select', 'id,subject,from,receivedDateTime,isRead,bodyPreview,hasAttachments');
+        let url = `https://graph.microsoft.com/v1.0/me/mailFolders/${folderId}/messages?${params.toString()}`;
+
+        let pulled = 0;
+        let loops = 0;
+        while (url && pulled < maxPerFolder && loops < 10) {
+          loops++;
+          const res = await graphFetch(url, { headers: graphHeaders() });
+          if (!res.ok) break;
+          const data = await res.json().catch(() => ({}));
+          const vals = data.value || [];
+          pulled += vals.length;
+
+          for (const m of vals) {
+            if (seen.has(m.id)) continue;
+            seen.add(m.id);
+            if (localMatch(m, qLower)) results.push(m);
+          }
+          url = data['@odata.nextLink'] || null;
+        }
+      }
+
+      // Try well-known folders first
+      for (const wk of commonWellKnown) {
+        try {
+          // Resolve folder id
+          const fr = await graphFetch(`https://graph.microsoft.com/v1.0/me/mailFolders/${wk}`, {
+            headers: graphHeaders()
+          });
+          if (!fr.ok) continue;
+          const f = await fr.json();
+          await pullFolderMessages(f.id, wk);
+        } catch (_) {}
+      }
+
+      // Also scan any loaded folders (lightly), in case mailbox uses custom folders heavily
+      // (Only if we still have very few results)
+      if (results.length < 10 && Array.isArray(folders) && folders.length) {
+        const extra = folders.slice(0, 10); // keep it light
+        for (const f of extra) {
+          if (!f?.id) continue;
+          try { await pullFolderMessages(f.id, f.displayName || 'folder'); } catch (_) {}
+        }
+      }
+
+      // apply unread filter
+      let final = results;
+      if (showOnlyUnread) final = final.filter(m => m.isRead === false);
+
+      // sort newest first (just in case)
+      final.sort((a,b) => new Date(b.receivedDateTime) - new Date(a.receivedDateTime));
+
+      return final;
     }
 
     async function searchMessages() {
@@ -1702,7 +1782,6 @@
         const query = (document.getElementById('searchInput').value || '').trim();
         document.getElementById('clearSearchBtn').style.opacity = query ? 1 : 0.6;
 
-        // If empty -> go back to current folder
         if (!query) {
           inSearchMode = false;
           lastSearchQuery = '';
@@ -1710,104 +1789,81 @@
           return;
         }
 
-        // Avoid re-searching same text every keypress
         if (query === lastSearchQuery) return;
         lastSearchQuery = query;
 
         inSearchMode = true;
-        updateStatus(`🔎 Searching all mail for: "${query}"...`, 'loading');
+        updateStatus(`🔎 Searching mailbox for: "${query}"...`, 'loading');
 
+        // 1) Primary: Graph $search across mailbox (this is the only one that can hit body reliably)
         try {
-          const url = buildMailboxSearchUrl(query);
-
-          const response = await fetch(url, {
-            headers: graphHeaders({
-              'ConsistencyLevel': 'eventual',
-              'Prefer': 'HonorNonIndexedQueriesWarning=true'
-            })
+          const url = buildMailboxSearchUrl(query, 50);
+          const headers = graphHeaders({
+            'ConsistencyLevel': 'eventual',
+            'Prefer': 'HonorNonIndexedQueriesWarning=true'
           });
 
-          if (response.status === 429) {
-            const retryAfter = response.headers.get('Retry-After') || 10;
-            updateStatus(`⏳ Rate limited. Waiting ${retryAfter}s...`, 'loading');
-            await delay(Number(retryAfter) * 1000);
-            lastSearchQuery = ''; // force retry
-            return searchMessages();
-          }
+          const paged = await fetchPagedMessages(url, headers, 250);
 
-          if (!response.ok) {
-            const err = await response.text();
-            updateStatus('❌ Search failed', 'invalid');
-            console.error('Search failed:', response.status, err);
+          if (paged.ok) {
+            let results = paged.items || [];
+            if (showOnlyUnread) results = results.filter(m => m.isRead === false);
 
-            // Fallback: client-side filter of current list (so you still get something)
-            const qLower = query.toLowerCase();
-            let local = (messages || []).filter(m => {
-              const subject = (m.subject || '').toLowerCase();
-              const from = (m.from?.emailAddress?.name || '').toLowerCase();
-              const fromAddr = (m.from?.emailAddress?.address || '').toLowerCase();
-              const preview = (m.bodyPreview || '').toLowerCase();
-              return subject.includes(qLower) || from.includes(qLower) || fromAddr.includes(qLower) || preview.includes(qLower);
-            });
-
-            if (showOnlyUnread) local = local.filter(m => m.isRead === false);
-
-            messages = local;
+            messages = results;
             currentMessageId = null;
             document.getElementById('messageActions').style.display = 'none';
-            document.getElementById('messageContent').innerHTML = `<div class="loading-message">🔎 Local results for "${escapeHtml(query)}"</div>`;
+            document.getElementById('messageContent').innerHTML = `<div class="loading-message">🔎 Showing results for "${escapeHtml(query)}"</div>`;
             renderMessageList();
-            updateStatus(`⚠️ Search API blocked (local matches: ${messages.length})`, 'warning');
+
+            updateStatus(`✅ Found ${messages.length} result(s) for "${query}"`, 'valid');
             return;
           }
 
-          const data = await response.json();
-          let results = data.value || [];
-
-          // Apply unread filter client-side (reliable)
-          if (showOnlyUnread) results = results.filter(m => m.isRead === false);
-
-          messages = results;
-          currentMessageId = null;
-          document.getElementById('messageActions').style.display = 'none';
-          document.getElementById('messageContent').innerHTML = `<div class="loading-message">🔎 Showing results for "${escapeHtml(query)}"</div>`;
-          renderMessageList();
-
-          updateStatus(`✅ Found ${messages.length} result(s) for "${query}"`, 'valid');
-
-        } catch (error) {
-          console.error('Search error:', error);
-
-          // Fallback: client-side filter of current list
-          const query2 = (document.getElementById('searchInput').value || '').trim();
-          const qLower = query2.toLowerCase();
-          let local = (messages || []).filter(m => {
-            const subject = (m.subject || '').toLowerCase();
-            const from = (m.from?.emailAddress?.name || '').toLowerCase();
-            const fromAddr = (m.from?.emailAddress?.address || '').toLowerCase();
-            const preview = (m.bodyPreview || '').toLowerCase();
-            return subject.includes(qLower) || from.includes(qLower) || fromAddr.includes(qLower) || preview.includes(qLower);
-          });
-
-          if (showOnlyUnread) local = local.filter(m => m.isRead === false);
-
-          messages = local;
-          currentMessageId = null;
-          document.getElementById('messageActions').style.display = 'none';
-          document.getElementById('messageContent').innerHTML = `<div class="loading-message">🔎 Local results for "${escapeHtml(query2)}"</div>`;
-          renderMessageList();
-          updateStatus(`⚠️ Search error (local matches: ${messages.length})`, 'warning');
+          // If Graph rejects $search (400/403 often), we fall through to local crawl
+          console.warn('Graph $search failed:', paged.status, paged.errorText);
+        } catch (e) {
+          console.warn('Graph $search exception:', e);
         }
-      }, 400);
+
+        // 2) Fallback: crawl recent messages from common folders and local-filter
+        // This guarantees you always get *some* results for most searches.
+        try {
+          updateStatus(`⚠️ Search API blocked — using fallback scan for "${query}"...`, 'warning');
+
+          const scanned = await fallbackCrawlRecent(query, 150);
+
+          messages = scanned;
+          currentMessageId = null;
+          document.getElementById('messageActions').style.display = 'none';
+          document.getElementById('messageContent').innerHTML =
+            `<div class="loading-message">🔎 Fallback results (recent mail scan) for "${escapeHtml(query)}"</div>`;
+          renderMessageList();
+
+          if (messages.length) {
+            updateStatus(`✅ Found ${messages.length} fallback match(es) for "${query}"`, 'valid');
+          } else {
+            // As last resort: local filter of the currently loaded list
+            const qLower = query.toLowerCase();
+            let local = (messages || []).filter(m => localMatch(m, qLower));
+            if (showOnlyUnread) local = local.filter(m => m.isRead === false);
+
+            messages = local;
+            renderMessageList();
+            updateStatus(`❌ No matches found for "${query}" (Graph search blocked + fallback scan empty)`, 'invalid');
+          }
+
+        } catch (e) {
+          console.error('Fallback scan failed:', e);
+          updateStatus(`❌ Search failed: ${e.message || e}`, 'invalid');
+        }
+      }, 350);
     }
 
     function toggleUnreadFilter() {
       showOnlyUnread = !showOnlyUnread;
       document.getElementById('filterBtn').textContent = showOnlyUnread ? '📫 Unread' : '📫 All';
 
-      // If currently searching, re-run search and apply unread filter client-side
       if (inSearchMode && lastSearchQuery) {
-        // force refresh by clearing lastSearchQuery so it executes
         const q = lastSearchQuery;
         lastSearchQuery = '';
         document.getElementById('searchInput').value = q;
@@ -1827,7 +1883,7 @@
       const deleteId = currentMessageId;
 
       try {
-        const response = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${deleteId}`, {
+        const response = await graphFetch(`https://graph.microsoft.com/v1.0/me/messages/${deleteId}`, {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${accessToken}` }
         });
@@ -1857,7 +1913,7 @@
     }
 
     async function moveMessageToFolder(messageId, destinationFolderId) {
-      const res = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}/move`, {
+      const res = await graphFetch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}/move`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ destinationId: destinationFolderId })
@@ -1880,7 +1936,6 @@
         await moveMessageToFolder(moveId, junkId);
         alert('✅ Moved to Junk');
 
-        // In search mode, remove the moved message from list
         if (inSearchMode) {
           messages = messages.filter(m => m.id !== moveId);
           currentMessageId = null;
@@ -1905,7 +1960,7 @@
       let senderAddress = '';
 
       try {
-        const msgRes = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${phishId}`, {
+        const msgRes = await graphFetch(`https://graph.microsoft.com/v1.0/me/messages/${phishId}`, {
           headers: { 'Authorization': `Bearer ${accessToken}` }
         });
         if (msgRes.ok) {
@@ -1934,7 +1989,6 @@
           alert('🎣 Reported phishing (moved to Junk). Could not detect sender address to create an always-junk rule.');
         }
 
-        // remove from list if searching
         if (inSearchMode) {
           messages = messages.filter(m => m.id !== phishId);
           renderMessageList();
@@ -2043,7 +2097,7 @@
 
     async function fetchServerRules() {
       const inboxId = await getInboxIdCached();
-      const res = await fetch(`https://graph.microsoft.com/v1.0/me/mailFolders/${inboxId}/messageRules?$orderby=sequence`, {
+      const res = await graphFetch(`https://graph.microsoft.com/v1.0/me/mailFolders/${inboxId}/messageRules?$orderby=sequence`, {
         headers: { 'Authorization': `Bearer ${accessToken}` }
       });
       if (!res.ok) {
@@ -2096,7 +2150,7 @@
     async function toggleServerRule(ruleId, currentlyEnabled) {
       try {
         const inboxId = await getInboxIdCached();
-        const res = await fetch(`https://graph.microsoft.com/v1.0/me/mailFolders/${inboxId}/messageRules/${ruleId}`, {
+        const res = await graphFetch(`https://graph.microsoft.com/v1.0/me/mailFolders/${inboxId}/messageRules/${ruleId}`, {
           method: 'PATCH',
           headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ isEnabled: !currentlyEnabled })
@@ -2119,7 +2173,7 @@
 
       try {
         const inboxId = await getInboxIdCached();
-        const res = await fetch(`https://graph.microsoft.com/v1.0/me/mailFolders/${inboxId}/messageRules/${ruleId}`, {
+        const res = await graphFetch(`https://graph.microsoft.com/v1.0/me/mailFolders/${inboxId}/messageRules/${ruleId}`, {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${accessToken}` }
         });
@@ -2221,7 +2275,7 @@
       };
       if (Object.keys(exceptions).length) payload.exceptions = exceptions;
 
-      const res = await fetch(`https://graph.microsoft.com/v1.0/me/mailFolders/${inboxId}/messageRules`, {
+      const res = await graphFetch(`https://graph.microsoft.com/v1.0/me/mailFolders/${inboxId}/messageRules`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -2309,7 +2363,7 @@
     async function previewAttachment(messageId, attachmentId, fileName, contentType) {
       if (contentType === 'application/pdf') {
         try {
-          const response = await fetch(
+          const response = await graphFetch(
             `https://graph.microsoft.com/v1.0/me/messages/${messageId}/attachments/${attachmentId}/$value`,
             { headers: { 'Authorization': `Bearer ${accessToken}` } }
           );
@@ -2439,17 +2493,11 @@
       }
 
       try {
-        const response = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
+        const response = await graphFetch('https://graph.microsoft.com/v1.0/me/sendMail', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ message, saveToSentItems: true })
         });
-
-        if (response.status === 429) {
-          const retryAfter = response.headers.get('Retry-After') || 10;
-          alert(`Rate limited. Please wait ${retryAfter} seconds.`);
-          return;
-        }
 
         if (response.ok) {
           alert('Email sent successfully!');
