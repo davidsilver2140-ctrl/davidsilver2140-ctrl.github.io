@@ -175,6 +175,7 @@
       background: white;
       cursor: pointer;
       font-size: 13px;
+      white-space: nowrap;
     }
 
     .message-list { flex: 1; overflow-y: auto; }
@@ -198,9 +199,10 @@
       margin-bottom: 4px;
       display: flex;
       justify-content: space-between;
+      gap: 10px;
     }
 
-    .message-date { font-size: 12px; color: #605e5c; }
+    .message-date { font-size: 12px; color: #605e5c; white-space: nowrap; }
     .message-subject { font-size: 14px; color: #323130; margin-bottom: 4px; }
     .message-preview {
       font-size: 13px;
@@ -662,8 +664,16 @@
         <!-- Message List -->
         <div class="message-pane">
           <div class="message-list-header">
-            <input type="text" class="search-box" id="searchInput" placeholder="Search" onkeyup="searchMessages()" />
+            <!-- IMPORTANT: Search now searches ALL MAIL (entire mailbox), not just current folder -->
+            <input
+              type="text"
+              class="search-box"
+              id="searchInput"
+              placeholder="Search all mail (subject, sender, body...)"
+              onkeyup="searchMessages()"
+            />
             <button class="filter-btn" onclick="toggleUnreadFilter()" id="filterBtn">📫 All</button>
+            <button class="filter-btn" onclick="clearSearch()" id="clearSearchBtn" title="Clear search">✖</button>
           </div>
           <div class="message-list" id="messageList">
             <div class="loading-message">📧 Connect to see your emails</div>
@@ -948,6 +958,10 @@
     let attachments = [];
     let drafts = JSON.parse(localStorage.getItem('emailDrafts') || '[]');
 
+    // Search state (NEW)
+    let lastSearchQuery = '';
+    let inSearchMode = false;
+
     // Signature (NEW)
     const SIGNATURE_KEY = 'emailSignatureV1';
     let signatureSettings = loadSignatureSettingsFromStorage();
@@ -1115,7 +1129,6 @@
     }
 
     function insertHtmlAtCursor(html) {
-      // Works well for contenteditable in most browsers
       document.execCommand('insertHTML', false, html);
     }
 
@@ -1123,10 +1136,6 @@
       let html = signatureSettings.html || '';
       if (!html) return '';
 
-      // If user uploaded a logo, ensure there's an <img> somewhere.
-      // Strategy:
-      // - If signature already has an <img>, replace the FIRST img src with our uploaded logo data URL.
-      // - Else, prepend the logo image at the top.
       if (signatureSettings.logoDataUrl) {
         const parser = new DOMParser();
         const doc = parser.parseFromString(`<div id="wrap">${html}</div>`, 'text/html');
@@ -1151,7 +1160,6 @@
         html = wrap ? wrap.innerHTML : html;
       }
 
-      // Outlook-ish: signatures typically separated by a line break
       return `<div><br></div><div>${html}</div>`;
     }
 
@@ -1166,7 +1174,6 @@
       insertHtmlAtCursor(sig);
     }
 
-    // Convert inline data:image/* in HTML -> Graph inline attachments (CID)
     function extractInlineImagesAsCid(html) {
       const parser = new DOMParser();
       const doc = parser.parseFromString(html || '<div></div>', 'text/html');
@@ -1178,15 +1185,12 @@
         const src = img.getAttribute('src') || '';
         if (!src.startsWith('data:')) return;
 
-        // data:[mime];base64,[content]
         const m = src.match(/^data:([^;]+);base64,(.+)$/);
         if (!m) return;
 
         const mime = m[1];
         const b64 = m[2];
         const contentId = `inline_${Date.now()}_${idx}_${uuidLike()}@local`;
-
-        // choose a name with extension if possible
         const ext = (mime.split('/')[1] || 'png').replace(/[^a-z0-9]/gi, '');
         const name = `inline-image-${idx + 1}.${ext}`;
 
@@ -1206,16 +1210,18 @@
       return { html: outHtml, inlineAttachments };
     }
 
-    // Paste handling in editor: keep rich HTML + allow pasted images
     function setupComposeEditorPasteHandling() {
       const editor = document.getElementById('composeBody');
       if (!editor) return;
+
+      // avoid double-binding
+      if (editor.__pasteBound) return;
+      editor.__pasteBound = true;
 
       editor.addEventListener('paste', (e) => {
         const cd = e.clipboardData;
         if (!cd) return;
 
-        // If clipboard has image file(s), insert them as data URLs (so we can CID them at send-time)
         const files = Array.from(cd.files || []);
         const imageFiles = files.filter(f => (f.type || '').startsWith('image/'));
         if (imageFiles.length) {
@@ -1233,7 +1239,6 @@
           return;
         }
 
-        // Prefer HTML if available (prevents "plain text" flattening)
         const html = cd.getData('text/html');
         if (html) {
           e.preventDefault();
@@ -1242,7 +1247,6 @@
           return;
         }
 
-        // Fallback: plain text as text
         const text = cd.getData('text/plain');
         if (text) {
           e.preventDefault();
@@ -1280,7 +1284,6 @@
         updateStatus(`✅ Connected as ${userEmail}`, 'valid');
         localStorage.setItem('accessToken', accessToken);
 
-        // reset caches
         inboxFolderIdCache = null;
         junkFolderIdCache = null;
 
@@ -1367,7 +1370,6 @@
     }
 
     async function getJunkFolderId() {
-      // Try well-known name first
       let res = await fetch('https://graph.microsoft.com/v1.0/me/mailFolders/junkemail', {
         headers: { 'Authorization': `Bearer ${accessToken}` }
       });
@@ -1376,7 +1378,6 @@
         return j.id;
       }
 
-      // Fallback: find by displayName
       if (!folders.length) await loadFolders();
       const junk = folders.find(f => ['junk email', 'junk'].includes(String(f.displayName || '').toLowerCase()));
       if (junk) return junk.id;
@@ -1423,6 +1424,12 @@
     // MESSAGES
     // ============================================
     async function loadFolder(folderId) {
+      // leaving folder view should end search mode
+      inSearchMode = false;
+      lastSearchQuery = '';
+      document.getElementById('searchInput').value = '';
+      document.getElementById('clearSearchBtn').style.opacity = 0.6;
+
       currentFolder = folderId;
       renderFolders();
       updateStatus(`🔄 Loading ${getFolderName(folderId)}...`, 'loading');
@@ -1476,7 +1483,7 @@
     function renderMessageList() {
       const messageList = document.getElementById('messageList');
       if (!messages.length) {
-        messageList.innerHTML = '<div class="loading-message">📭 No messages in this folder</div>';
+        messageList.innerHTML = '<div class="loading-message">📭 No messages found</div>';
         return;
       }
 
@@ -1489,7 +1496,7 @@
           </div>
           <div class="message-subject">
             ${escapeHtml(msg.subject || '(No subject)')}
-            ${msg.hasAttachments ? '<span class="attachment-indicator">📎</span>' : ''}
+            ${(msg.hasAttachments || (msg.attachments && msg.attachments.length)) ? '<span class="attachment-indicator">📎</span>' : ''}
           </div>
           <div class="message-preview">${escapeHtml(msg.bodyPreview || '')}</div>
         </div>
@@ -1647,42 +1654,118 @@
     }
 
     // ============================================
-    // SEARCH / FILTER
+    // SEARCH / FILTER (UPDATED: SEARCHES ENTIRE MAILBOX)
     // ============================================
     let searchTimeout;
+
+    // Graph $search requires ConsistencyLevel: eventual (VERY IMPORTANT)
+    function graphHeaders(extra = {}) {
+      return {
+        'Authorization': `Bearer ${accessToken}`,
+        ...extra
+      };
+    }
+
+    function clearSearch() {
+      const input = document.getElementById('searchInput');
+      input.value = '';
+      lastSearchQuery = '';
+      inSearchMode = false;
+      document.getElementById('clearSearchBtn').style.opacity = 0.6;
+      // reload current folder view
+      loadFolder(currentFolder);
+    }
+
     async function searchMessages() {
       clearTimeout(searchTimeout);
+
       searchTimeout = setTimeout(async () => {
-        const query = document.getElementById('searchInput').value.trim();
-        if (!query) { loadFolder(currentFolder); return; }
+        if (!accessToken) return;
+
+        const query = (document.getElementById('searchInput').value || '').trim();
+        document.getElementById('clearSearchBtn').style.opacity = query ? 1 : 0.6;
+
+        // If empty -> go back to current folder
+        if (!query) {
+          inSearchMode = false;
+          lastSearchQuery = '';
+          loadFolder(currentFolder);
+          return;
+        }
+
+        // Avoid re-searching same text every keypress
+        if (query === lastSearchQuery) return;
+        lastSearchQuery = query;
+
+        // Enter search mode
+        inSearchMode = true;
+        updateStatus(`🔎 Searching all mail for: "${query}"...`, 'loading');
 
         try {
-          const response = await fetch(
-            `https://graph.microsoft.com/v1.0/me/mailFolders/${currentFolder}/messages?$search="${query}"&$top=20`,
-            { headers: { 'Authorization': `Bearer ${accessToken}` } }
-          );
+          // NOTE:
+          // - Search is mailbox-wide: /me/messages
+          // - $search matches across multiple fields (subject, body, sender, recipients...)
+          // - Must send ConsistencyLevel: eventual
+          // - We include $orderby so newest first
+          const url =
+            `https://graph.microsoft.com/v1.0/me/messages` +
+            `?$search="${encodeURIComponent(query).replace(/%20/g, ' ')}"` +
+            `&$top=50` +
+            `&$orderby=receivedDateTime DESC`;
+
+          const response = await fetch(url, {
+            headers: graphHeaders({
+              'ConsistencyLevel': 'eventual',
+              // optional: helps when some results are non-indexed
+              'Prefer': 'HonorNonIndexedQueriesWarning=true'
+            })
+          });
 
           if (response.status === 429) {
             const retryAfter = response.headers.get('Retry-After') || 10;
             updateStatus(`⏳ Rate limited. Waiting ${retryAfter}s...`, 'loading');
             await delay(retryAfter * 1000);
+            lastSearchQuery = ''; // force retry
             return searchMessages();
           }
 
-          if (!response.ok) throw new Error('Search failed');
+          if (!response.ok) {
+            const err = await response.text();
+            updateStatus('❌ Search failed', 'invalid');
+            console.error('Search failed:', err);
+            return;
+          }
+
           const data = await response.json();
           messages = data.value || [];
+          currentMessageId = null;
+          document.getElementById('messageActions').style.display = 'none';
+          document.getElementById('messageContent').innerHTML = `<div class="loading-message">🔎 Showing results for "${escapeHtml(query)}"</div>`;
           renderMessageList();
+
+          updateStatus(`✅ Found ${messages.length} result(s) for "${query}"`, 'valid');
 
         } catch (error) {
           console.error('Search error:', error);
+          updateStatus('❌ Search error', 'invalid');
         }
-      }, 500);
+      }, 400);
     }
 
     function toggleUnreadFilter() {
       showOnlyUnread = !showOnlyUnread;
       document.getElementById('filterBtn').textContent = showOnlyUnread ? '📫 Unread' : '📫 All';
+
+      // If currently searching, re-run search with the same query AND apply unread filter client-side
+      // (Graph search + unread filter in same query can be inconsistent). We'll do quick client filter.
+      if (inSearchMode && lastSearchQuery) {
+        // re-run search
+        lastSearchQuery = '';
+        searchMessages();
+        return;
+      }
+
+      // normal folder mode
       loadFolder(currentFolder);
     }
 
@@ -1701,6 +1784,17 @@
         if (!response.ok && response.status !== 204) throw new Error('Delete failed');
 
         await delay(300);
+
+        // If we were searching, keep search view but remove deleted item locally
+        if (inSearchMode) {
+          messages = messages.filter(m => m.id !== currentMessageId);
+          currentMessageId = null;
+          renderMessageList();
+          document.getElementById('messageContent').innerHTML = '<div class="loading-message">Message deleted</div>';
+          document.getElementById('messageActions').style.display = 'none';
+          return;
+        }
+
         loadFolder(currentFolder);
         document.getElementById('messageContent').innerHTML = '<div class="loading-message">Message deleted</div>';
         document.getElementById('messageActions').style.display = 'none';
@@ -1710,9 +1804,6 @@
       }
     }
 
-    // ---- IMPORTANT FIX ----
-    // We DO NOT use /markAsJunk here (your payload error).
-    // We simply MOVE the message to Junk folder using /move.
     async function moveMessageToFolder(messageId, destinationFolderId) {
       const res = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}/move`, {
         method: 'POST',
@@ -1734,7 +1825,15 @@
         await moveMessageToFolder(currentMessageId, junkId);
         alert('✅ Moved to Junk');
         currentMessageId = null;
-        loadFolder(currentFolder);
+
+        // In search mode, remove the message from list
+        if (inSearchMode) {
+          messages = messages.filter(m => m.id !== currentMessageId);
+          renderMessageList();
+        } else {
+          loadFolder(currentFolder);
+        }
+
         document.getElementById('messageContent').innerHTML = '<div class="loading-message">Moved to Junk</div>';
         document.getElementById('messageActions').style.display = 'none';
       } catch (e) {
@@ -1743,13 +1842,9 @@
       }
     }
 
-    // "Report phishing" UX:
-    // - Move this message to junk
-    // - Try to create a server-side rule: from sender -> move to junk (future mail)
     async function reportPhishingCurrentMessage() {
       if (!currentMessageId) return;
 
-      // Get full message so we have sender address
       let senderAddress = '';
       try {
         const msgRes = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${currentMessageId}`, {
@@ -1765,7 +1860,6 @@
         const junkId = await getJunkIdCached();
         await moveMessageToFolder(currentMessageId, junkId);
 
-        // Try to create "always junk this sender" rule
         if (senderAddress) {
           try {
             await createAlwaysJunkSenderRule(senderAddress);
@@ -1783,7 +1877,14 @@
         }
 
         currentMessageId = null;
-        loadFolder(currentFolder);
+
+        if (inSearchMode && lastSearchQuery) {
+          lastSearchQuery = ''; // force refresh
+          searchMessages();
+        } else {
+          loadFolder(currentFolder);
+        }
+
         document.getElementById('messageContent').innerHTML = '<div class="loading-message">Reported phishing (moved to Junk)</div>';
         document.getElementById('messageActions').style.display = 'none';
 
@@ -1980,7 +2081,6 @@
     async function createServerSideRule(rule) {
       const inboxId = await getInboxIdCached();
 
-      // Conditions
       const conditions = {};
       const cv = (rule.condition.value || '').trim();
 
@@ -1994,7 +2094,6 @@
         default: throw new Error(`Condition not supported for server rule: ${rule.condition.type}`);
       }
 
-      // Exceptions
       const exceptions = {};
       if (rule.exception?.type) {
         const ev = (rule.exception.value || '').trim();
@@ -2007,7 +2106,6 @@
         }
       }
 
-      // Actions
       const actions = {};
       for (const a of rule.actions) {
         const v = (a.value || '').trim();
@@ -2051,10 +2149,8 @@
         }
       }
 
-      // stopProcessingRules belongs inside actions
       actions.stopProcessingRules = !!rule.stopProcessing;
 
-      // Sequence: append
       const existing = await fetchServerRules();
       const nextSeq = existing.length ? Math.max(...existing.map(r => r.sequence || 0)) + 1 : 1;
 
@@ -2188,14 +2284,8 @@
       attachments = [];
       updateAttachmentList();
 
-      // Load signature settings fresh (in case changed)
       signatureSettings = loadSignatureSettingsFromStorage();
-
-      // Ensure paste handling installed
       setupComposeEditorPasteHandling();
-
-      // Optional: auto-insert signature if you want:
-      // if (signatureSettings.html) { setTimeout(() => insertSignature(), 0); }
     }
 
     function closeCompose() {
@@ -2253,10 +2343,8 @@
       const cc = document.getElementById('composeCc').value.split(',').map(e => e.trim()).filter(e => e);
       const bcc = document.getElementById('composeBcc').value.split(',').map(e => e.trim()).filter(e => e);
 
-      // NEW: Use editor HTML exactly (no newline -> <br> flattening)
       let htmlBody = getComposeHtml();
 
-      // NEW: Convert any embedded data:image/* to CID inline attachments (Outlook-style)
       const { html, inlineAttachments } = extractInlineImagesAsCid(htmlBody);
       htmlBody = html;
 
@@ -2271,7 +2359,6 @@
         bccRecipients: bcc.map(email => ({ emailAddress: { address: email } }))
       };
 
-      // Attachments: regular + inline
       const allAttachments = [];
 
       if (attachments.length > 0) {
@@ -2328,7 +2415,7 @@
         cc: document.getElementById('composeCc').value,
         bcc: document.getElementById('composeBcc').value,
         subject: document.getElementById('composeSubject').value,
-        body: getComposeHtml(), // NEW: store HTML
+        body: getComposeHtml(),
         bodyPreview: (document.getElementById('composeBody').innerText || '').substring(0, 100),
         attachments: [...attachments],
         savedAt: new Date().toISOString()
@@ -2415,8 +2502,8 @@
         }
       }
 
-      // Prep signature state + meta
       signatureSettings = loadSignatureSettingsFromStorage();
+      document.getElementById('clearSearchBtn').style.opacity = 0.6;
     };
   </script>
 </body>
