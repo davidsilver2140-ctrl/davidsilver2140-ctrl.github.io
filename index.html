@@ -178,7 +178,6 @@
       white-space: nowrap;
     }
 
-    /* IMPORTANT: message list must be scrollable */
     .message-list {
       flex: 1;
       overflow-y: auto;
@@ -564,6 +563,7 @@
       flex-wrap: wrap;
       margin-bottom: 10px;
     }
+
     .toolbar-btn {
       padding: 6px 10px;
       border: 1px solid #8a8886;
@@ -572,6 +572,7 @@
       cursor: pointer;
       font-size: 13px;
     }
+
     .toolbar-btn:hover { background: #f5f5f5; }
 
     .compose-editor {
@@ -585,10 +586,12 @@
       overflow: auto;
       outline: none;
     }
+
     .compose-editor:focus {
       border-color: #0078d4;
       box-shadow: 0 0 0 2px rgba(0,120,212,0.3);
     }
+
     .compose-editor img { max-width: 100%; height: auto; }
 
     .hint {
@@ -598,7 +601,6 @@
       margin-bottom: 12px;
     }
 
-    /* NEW: infinite scroll footer row */
     .load-more-row{
       padding: 14px 16px;
       text-align:center;
@@ -609,6 +611,7 @@
       position: sticky;
       bottom: 0;
     }
+
     .load-more-row .mini {
       padding: 0;
       margin: 0;
@@ -686,7 +689,6 @@
             <div class="loading-message">📧 Connect to see your emails</div>
           </div>
 
-          <!-- Infinite scroll footer -->
           <div id="loadMoreRow" class="load-more-row" style="display:none;">
             <span id="loadMoreText">Scroll to load more…</span>
           </div>
@@ -710,7 +712,6 @@
     </div>
   </div>
 
-  <!-- Compose Modal -->
   <div class="modal" id="composeModal">
     <div class="modal-content">
       <div class="modal-header">
@@ -751,7 +752,6 @@
     </div>
   </div>
 
-  <!-- Signature Modal -->
   <div class="modal" id="signatureModal" style="z-index: 2400;">
     <div class="modal-content" style="width: 720px;">
       <div class="modal-header">
@@ -785,7 +785,6 @@
     </div>
   </div>
 
-  <!-- Rules Modal -->
   <div class="rules-modal" id="rulesModal">
     <div class="rules-modal-content">
       <div class="rules-modal-header">
@@ -898,7 +897,6 @@
     </div>
   </div>
 
-  <!-- Additional Action Modal -->
   <div class="modal" id="additionalActionModal">
     <div class="modal-content" style="width: 600px;">
       <div class="modal-header">
@@ -937,7 +935,6 @@
     </div>
   </div>
 
-  <!-- PDF Preview Modal -->
   <div class="pdf-modal" id="pdfModal">
     <div class="pdf-modal-content">
       <div class="pdf-header">
@@ -951,9 +948,6 @@
   </div>
 
   <script>
-    // ============================================
-    // STATE
-    // ============================================
     let accessToken = '';
     let currentFolder = 'inbox';
     let currentMessageId = null;
@@ -964,33 +958,40 @@
     let attachments = [];
     let drafts = JSON.parse(localStorage.getItem('emailDrafts') || '[]');
 
-    // Search state
     let lastSearchQuery = '';
     let inSearchMode = false;
 
-    // Pagination state (FIXED)
-    let nextLink = null;                 // folder mode nextLink
-    let searchNextLink = null;           // search mode nextLink
+    let nextLink = null;
+    let searchNextLink = null;
     let isLoadingMore = false;
     let reachedEnd = false;
 
-    // Signature
     const SIGNATURE_KEY = 'emailSignatureV1';
     let signatureSettings = loadSignatureSettingsFromStorage();
 
-    // Rule builder state
     let selectedCondition = '';
     let selectedAction = '';
     let additionalActions = [];
 
-    // Cache ids
     let inboxFolderIdCache = null;
     let junkFolderIdCache = null;
 
-    // ============================================
-    // HELPERS
-    // ============================================
-    async function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+    let isConnecting = false;
+    let tokenExpiryInterval = null;
+    let autoConnectScheduled = false;
+
+    let folderLoadSeq = 0;
+    let searchLoadSeq = 0;
+    let messageLoadSeq = 0;
+
+    let graphQueue = Promise.resolve();
+    let lastGraphRequestAt = 0;
+    const GRAPH_MIN_GAP_MS = 350;
+    const GRAPH_MAX_RETRIES = 5;
+
+    async function delay(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
 
     function decodeToken(token) {
       try {
@@ -1005,22 +1006,34 @@
 
     function checkTokenExpiry() {
       if (!accessToken) return false;
+
       const payload = decodeToken(accessToken);
+      const expiryEl = document.getElementById('expiryWarning');
+
       if (payload && payload.exp) {
         const expiryDate = new Date(payload.exp * 1000);
         const now = new Date();
         const timeLeft = expiryDate - now;
+
         if (timeLeft < 10 * 60 * 1000 && timeLeft > 0) {
-          document.getElementById('expiryWarning').style.display = 'inline-block';
-          document.getElementById('expiryWarning').textContent = `⚠️ Token expires in ${Math.round(timeLeft / 60000)} minutes`;
+          expiryEl.style.display = 'inline-block';
+          expiryEl.textContent = `⚠️ Token expires in ${Math.max(1, Math.round(timeLeft / 60000))} minutes`;
           return true;
         } else if (timeLeft <= 0) {
+          expiryEl.style.display = 'none';
           updateStatus('❌ Token expired', 'invalid');
           localStorage.removeItem('accessToken');
           return false;
         }
       }
+
+      expiryEl.style.display = 'none';
       return true;
+    }
+
+    function startTokenExpiryWatcher() {
+      if (tokenExpiryInterval) clearInterval(tokenExpiryInterval);
+      tokenExpiryInterval = setInterval(checkTokenExpiry, 60000);
     }
 
     function updateStatus(text, type) {
@@ -1055,20 +1068,53 @@
       return { 'Authorization': `Bearer ${accessToken}`, ...extra };
     }
 
-    async function graphFetch(url, opts = {}) {
-      const res = await fetch(url, opts);
-      if (res.status === 429) {
-        const retryAfter = res.headers.get('Retry-After') || 10;
-        updateStatus(`⏳ Rate limited. Waiting ${retryAfter}s...`, 'loading');
-        await delay(Number(retryAfter) * 1000);
-        return graphFetch(url, opts);
+    function getRetryDelayMs(res, attempt) {
+      const retryAfter = res?.headers?.get?.('Retry-After');
+      if (retryAfter && /^\d+$/.test(retryAfter)) {
+        return Math.max(1000, Number(retryAfter) * 1000);
       }
+
+      const base = Math.min(30000, 1200 * Math.pow(2, attempt));
+      const jitter = Math.floor(Math.random() * 500);
+      return base + jitter;
+    }
+
+    async function runGraphRequest(url, opts = {}, attempt = 0) {
+      const now = Date.now();
+      const gap = now - lastGraphRequestAt;
+      if (gap < GRAPH_MIN_GAP_MS) {
+        await delay(GRAPH_MIN_GAP_MS - gap);
+      }
+
+      lastGraphRequestAt = Date.now();
+
+      let res;
+      try {
+        res = await fetch(url, opts);
+      } catch (err) {
+        if (attempt >= GRAPH_MAX_RETRIES) throw err;
+        const waitMs = Math.min(20000, 1200 * Math.pow(2, attempt));
+        await delay(waitMs);
+        return runGraphRequest(url, opts, attempt + 1);
+      }
+
+      if (res.status === 429 || res.status === 503) {
+        if (attempt >= GRAPH_MAX_RETRIES) return res;
+        const waitMs = getRetryDelayMs(res, attempt);
+        updateStatus(`⏳ Rate limited. Waiting ${Math.ceil(waitMs / 1000)}s...`, 'loading');
+        await delay(waitMs);
+        return runGraphRequest(url, opts, attempt + 1);
+      }
+
       return res;
     }
 
-    // ============================================
-    // INFINITE SCROLL (FIXED ONCE AND FOR ALL)
-    // ============================================
+    async function graphFetch(url, opts = {}) {
+      const task = graphQueue.then(() => runGraphRequest(url, opts));
+      graphQueue = task.catch(() => {});
+      return task;
+    }
+
     function resetPaging() {
       nextLink = null;
       searchNextLink = null;
@@ -1092,7 +1138,6 @@
       list.__scrollBound = true;
 
       list.addEventListener('scroll', async () => {
-        // load more when near bottom
         const nearBottom = (list.scrollTop + list.clientHeight) >= (list.scrollHeight - 220);
         if (!nearBottom) return;
 
@@ -1107,7 +1152,7 @@
     async function loadMoreFolderMessages() {
       if (!accessToken) return;
       if (isLoadingMore || reachedEnd) return;
-      if (!nextLink) return; // nothing to load
+      if (!nextLink) return;
 
       isLoadingMore = true;
       setLoadMoreRow(true, 'Loading more messages…');
@@ -1120,17 +1165,14 @@
         const newItems = data.value || [];
         const newNext = data['@odata.nextLink'] || null;
 
-        // append, de-dupe
         const seen = new Set(messages.map(m => m.id));
         for (const m of newItems) {
-          if (!m?.id) continue;
-          if (seen.has(m.id)) continue;
+          if (!m?.id || seen.has(m.id)) continue;
           messages.push(m);
           seen.add(m.id);
         }
 
         nextLink = newNext;
-
         renderMessageList();
 
         if (!nextLink || newItems.length === 0) {
@@ -1156,10 +1198,13 @@
       setLoadMoreRow(true, 'Loading more search results…');
 
       try {
-        const res = await graphFetch(searchNextLink, { headers: graphHeaders({
-          'ConsistencyLevel': 'eventual',
-          'Prefer': 'HonorNonIndexedQueriesWarning=true'
-        })});
+        const res = await graphFetch(searchNextLink, {
+          headers: graphHeaders({
+            'ConsistencyLevel': 'eventual',
+            'Prefer': 'HonorNonIndexedQueriesWarning=true'
+          })
+        });
+
         if (!res.ok) throw new Error('Failed to load more search results');
 
         const data = await res.json();
@@ -1170,14 +1215,12 @@
 
         const seen = new Set(messages.map(m => m.id));
         for (const m of newItems) {
-          if (!m?.id) continue;
-          if (seen.has(m.id)) continue;
+          if (!m?.id || seen.has(m.id)) continue;
           messages.push(m);
           seen.add(m.id);
         }
 
         searchNextLink = newNext;
-
         renderMessageList();
 
         if (!searchNextLink || newItems.length === 0) {
@@ -1194,9 +1237,6 @@
       }
     }
 
-    // ============================================
-    // Editor + Signature helpers
-    // ============================================
     function formatDoc(cmd) {
       if (cmd === 'createLink') {
         const url = prompt('Enter URL (https://...)');
@@ -1367,9 +1407,7 @@
 
     function setupComposeEditorPasteHandling() {
       const editor = document.getElementById('composeBody');
-      if (!editor) return;
-
-      if (editor.__pasteBound) return;
+      if (!editor || editor.__pasteBound) return;
       editor.__pasteBound = true;
 
       editor.addEventListener('paste', (e) => {
@@ -1410,15 +1448,15 @@
       });
     }
 
-    // ============================================
-    // CONNECT
-    // ============================================
     async function connectWithToken() {
       const tokenInput = document.getElementById('accessTokenInput').value.trim();
       if (!tokenInput) {
         updateStatus('Please enter a token', 'invalid');
         return;
       }
+
+      if (isConnecting) return;
+      isConnecting = true;
 
       accessToken = tokenInput;
       updateStatus('🔄 Connecting...', 'loading');
@@ -1430,10 +1468,13 @@
         });
 
         if (userResponse.status === 401) throw new Error('Token expired or invalid');
-        if (!userResponse.ok) throw new Error('Invalid token');
+        if (!userResponse.ok) {
+          const txt = await userResponse.text().catch(() => '');
+          throw new Error(txt || 'Invalid token');
+        }
 
         const userData = await userResponse.json();
-        userEmail = userData.mail || userData.userPrincipalName;
+        userEmail = userData.mail || userData.userPrincipalName || '';
 
         updateStatus(`✅ Connected as ${userEmail}`, 'valid');
         localStorage.setItem('accessToken', accessToken);
@@ -1442,31 +1483,30 @@
         junkFolderIdCache = null;
 
         checkTokenExpiry();
-        setInterval(checkTokenExpiry, 60000);
+        startTokenExpiryWatcher();
 
-        initMessageListScroll();   // <-- important
+        initMessageListScroll();
         await loadFolders();
-        await delay(250);
         await loadFolder('inbox');
-
       } catch (error) {
-        updateStatus('❌ Invalid token', 'invalid');
         console.error(error);
+        updateStatus(`❌ ${error.message || 'Invalid token'}`, 'invalid');
       } finally {
         document.getElementById('connectBtn').disabled = false;
+        isConnecting = false;
       }
     }
 
-    // ============================================
-    // FOLDERS
-    // ============================================
     async function loadFolders() {
+      if (!accessToken) return;
+
       const response = await graphFetch('https://graph.microsoft.com/v1.0/me/mailFolders', {
         headers: graphHeaders()
       });
 
       if (!response.ok) {
-        updateStatus('❌ Error loading folders', 'invalid');
+        const txt = await response.text().catch(() => '');
+        updateStatus(`❌ Error loading folders${txt ? ': ' + txt : ''}`, 'invalid');
         return;
       }
 
@@ -1484,7 +1524,7 @@
         .concat(folders.filter(f => !defaultFolders.includes((f.displayName || '').toLowerCase())))
         .map(folder => `
           <div class="folder-item ${folder.displayName?.toLowerCase() === String(currentFolder).toLowerCase() ? 'active' : ''}"
-               onclick="loadFolder('${folder.id}')">
+               onclick="loadFolder('${String(folder.id).replace(/'/g, "\\'")}')">
             <span class="folder-icon">${getFolderIcon(folder.displayName)}</span>
             <span class="folder-name">${escapeHtml(folder.displayName || '')}</span>
             <span class="folder-count">${folder.totalItemCount || 0}</span>
@@ -1499,7 +1539,7 @@
 
     function getFolderName(folderId) {
       const folder = folders.find(f => f.id === folderId);
-      return folder ? folder.displayName : (String(folderId || '').toLowerCase());
+      return folder ? folder.displayName : String(folderId || '').toLowerCase();
     }
 
     async function getInboxFolderId() {
@@ -1568,12 +1608,12 @@
       return null;
     }
 
-    // ============================================
-    // MESSAGES (FOLDER MODE) - NOW PAGINATED + INFINITE SCROLL
-    // ============================================
     async function loadFolder(folderId) {
+      if (!accessToken) return;
+
       initMessageListScroll();
 
+      const seq = ++folderLoadSeq;
       inSearchMode = false;
       lastSearchQuery = '';
       document.getElementById('searchInput').value = '';
@@ -1586,27 +1626,32 @@
 
       updateStatus(`🔄 Loading ${getFolderName(folderId)}...`, 'loading');
       document.getElementById('messageList').innerHTML = '<div class="loading-message"><div class="spinner"></div>Loading messages...</div>';
+      document.getElementById('messageActions').style.display = 'none';
+      document.getElementById('messageContent').innerHTML = '<div class="loading-message">👈 Select a message to read</div>';
       setLoadMoreRow(false);
 
       try {
         const params = new URLSearchParams();
-        params.set('$top', '35'); // more like Outlook
+        params.set('$top', '25');
         params.set('$orderby', 'receivedDateTime DESC');
         params.set('$select', 'id,subject,from,receivedDateTime,isRead,bodyPreview,hasAttachments,toRecipients,ccRecipients');
 
         if (showOnlyUnread) params.set('$filter', 'isRead eq false');
 
-        // folderId can be well-known (inbox) or real folder id
         const url = `https://graph.microsoft.com/v1.0/me/mailFolders/${folderId}/messages?${params.toString()}`;
-
         const response = await graphFetch(url, { headers: graphHeaders() });
-        if (!response.ok) throw new Error('Failed to load messages');
+
+        if (seq !== folderLoadSeq) return;
+
+        if (!response.ok) {
+          const txt = await response.text().catch(() => '');
+          throw new Error(txt || 'Failed to load messages');
+        }
 
         const data = await response.json();
         messages = data.value || [];
         nextLink = data['@odata.nextLink'] || null;
 
-        // drafts overlay
         if (String(folderId).toLowerCase().includes('draft')) {
           drafts.forEach(draft => {
             messages.unshift({
@@ -1624,18 +1669,14 @@
         renderMessageList();
         updateStatus(`✅ Connected as ${userEmail}`, 'valid');
 
-        // show load more footer if nextLink exists
         if (nextLink) {
           setLoadMoreRow(true, 'Scroll to load more…');
         } else {
           setLoadMoreRow(true, '✅ All messages loaded');
           reachedEnd = true;
         }
-
-        await delay(250);
-        loadFolders();
-
       } catch (error) {
+        if (seq !== folderLoadSeq) return;
         updateStatus('❌ Error loading messages', 'invalid');
         console.error(error);
         document.getElementById('messageList').innerHTML = `<div class="loading-message">❌ ${escapeHtml(error.message || error)}</div>`;
@@ -1651,7 +1692,7 @@
 
       messageList.innerHTML = messages.map(msg => `
         <div class="message-item ${msg.isRead ? '' : 'unread'} ${msg.id === currentMessageId ? 'selected' : ''}"
-             onclick="loadMessage('${msg.id}')">
+             onclick="loadMessage('${String(msg.id).replace(/'/g, "\\'")}')">
           <div class="message-sender">
             <span>${escapeHtml(msg.from?.emailAddress?.name || 'Unknown')} ${msg.isDraft ? '<span class="draft-badge">Draft</span>' : ''}</span>
             <span class="message-date">${formatDate(msg.receivedDateTime)}</span>
@@ -1679,9 +1720,6 @@
       return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
     }
 
-    // ============================================
-    // SIGNATURE FIX: resolve CID inline images
-    // ============================================
     async function resolveCidImagesInHtml(html, msgId, attachmentsMeta) {
       if (!html || !String(html).includes('cid:')) return html;
 
@@ -1689,21 +1727,13 @@
       const doc = parser.parseFromString(html, 'text/html');
       const imgs = Array.from(doc.querySelectorAll('img'));
 
-      const cidSrcs = imgs
-        .map(i => i.getAttribute('src') || '')
-        .filter(s => s.toLowerCase().startsWith('cid:'));
-
-      if (!cidSrcs.length) return html;
-
       const cidToAttachment = new Map();
       for (const att of (attachmentsMeta || [])) {
-        // Outlook uses contentId for inline images/signature logos
         if (att && att.isInline && att.contentId) {
           cidToAttachment.set(String(att.contentId).replace(/[<>]/g, ''), att);
         }
       }
 
-      // For each cid image, fetch the attachment contentBytes if needed
       for (const img of imgs) {
         const src = img.getAttribute('src') || '';
         if (!src.toLowerCase().startsWith('cid:')) continue;
@@ -1713,7 +1743,6 @@
         if (!att || !att.id) continue;
 
         try {
-          // Fetch full attachment to get contentBytes
           const res = await graphFetch(`https://graph.microsoft.com/v1.0/me/messages/${msgId}/attachments/${att.id}`, {
             headers: graphHeaders()
           });
@@ -1742,6 +1771,7 @@
         return;
       }
 
+      const seq = ++messageLoadSeq;
       currentMessageId = messageId;
       renderMessageList();
 
@@ -1753,30 +1783,35 @@
           headers: graphHeaders()
         });
 
-        if (!response.ok) throw new Error('Failed to load message');
+        if (seq !== messageLoadSeq) return;
+        if (!response.ok) {
+          const txt = await response.text().catch(() => '');
+          throw new Error(txt || 'Failed to load message');
+        }
+
         const msg = await response.json();
 
         if (!msg.isRead) {
-          await delay(120);
-          await graphFetch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
+          graphFetch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
             method: 'PATCH',
             headers: { ...graphHeaders(), 'Content-Type': 'application/json' },
             body: JSON.stringify({ isRead: true })
-          });
-
-          const index = messages.findIndex(m => m.id === messageId);
-          if (index !== -1) messages[index].isRead = true;
-          renderMessageList();
+          }).then(() => {
+            const index = messages.findIndex(m => m.id === messageId);
+            if (index !== -1) messages[index].isRead = true;
+            renderMessageList();
+          }).catch(err => console.warn('Failed marking as read:', err));
         }
 
-        // FIX: resolve CID images so signatures render like Outlook
         if (msg.body?.contentType === 'html' && String(msg.body.content || '').includes('cid:')) {
           msg.body.content = await resolveCidImagesInHtml(msg.body.content, msg.id, msg.attachments || []);
         }
 
+        if (seq !== messageLoadSeq) return;
         renderMessageContent(msg);
 
       } catch (error) {
+        if (seq !== messageLoadSeq) return;
         console.error('Error loading message:', error);
         document.getElementById('messageContent').innerHTML = `<div class="loading-message">❌ ${escapeHtml(error.message || error)}</div>`;
       }
@@ -1815,7 +1850,6 @@
 
       let bodyContent = '';
       if (msg.body?.contentType === 'html') {
-        // srcdoc keeps Outlook HTML intact, including signatures + styling
         bodyContent = `<iframe srcdoc="${escapeHtml(msg.body.content).replace(/"/g, '&quot;')}"
           style="width:100%; min-height:620px; border:none;"
           sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
@@ -1863,7 +1897,7 @@
               <div style="margin-top: 12px;">
                 ${(msg.attachments || []).map(att => `
                   <div class="attachment-item"
-                       onclick="previewAttachment('${msg.id}', '${att.id}', '${escapeHtml(att.name)}', '${att.contentType}')">
+                       onclick="previewAttachment('${String(msg.id).replace(/'/g, "\\'")}', '${String(att.id).replace(/'/g, "\\'")}', '${escapeHtml(att.name)}', '${escapeHtml(att.contentType || '')}')">
                     📎 ${escapeHtml(att.name)} (${Math.round(att.size/1024)} KB)
                   </div>`).join('')}
               </div>
@@ -1873,9 +1907,6 @@
       `;
     }
 
-    // ============================================
-    // SEARCH (PAGINATED + INFINITE SCROLL)
-    // ============================================
     let searchTimeout;
 
     function clearSearch() {
@@ -1895,43 +1926,41 @@
       return subject.includes(qLower) || from.includes(qLower) || fromAddr.includes(qLower) || preview.includes(qLower);
     }
 
-    function buildMailboxSearchUrl(query, top = 50) {
+    function buildMailboxSearchUrl(query, top = 25) {
       const q = String(query || '').replace(/"/g, '\\"').trim();
       const params = new URLSearchParams();
       params.set('$top', String(top));
       params.set('$count', 'true');
       params.set('$search', `"${q}"`);
-      params.set('$orderby', 'receivedDateTime DESC');
       params.set('$select', 'id,subject,from,receivedDateTime,isRead,bodyPreview,hasAttachments,toRecipients,ccRecipients');
       return `https://graph.microsoft.com/v1.0/me/messages?${params.toString()}`;
     }
 
-    async function fetchPagedMessages(startUrl, headers, maxItems = 250) {
+    async function fetchPagedMessages(startUrl, headers, maxItems = 100) {
       let url = startUrl;
       let out = [];
       let loops = 0;
 
-      while (url && out.length < maxItems && loops < 10) {
+      while (url && out.length < maxItems && loops < 4) {
         loops++;
         const res = await graphFetch(url, { headers });
+
         if (!res.ok) {
           const errText = await res.text().catch(() => '');
           return { ok: false, status: res.status, errorText: errText, items: out, nextLink: null };
         }
+
         const data = await res.json().catch(() => ({}));
         const vals = data.value || [];
         out = out.concat(vals);
-
-        // we keep nextLink for infinite scroll
         url = data['@odata.nextLink'] || null;
-        // stop early so UI can scroll-load the rest
         break;
       }
 
       return { ok: true, status: 200, items: out, nextLink: url };
     }
 
-    async function fallbackCrawlRecent(query, maxPerFolder = 120) {
+    async function fallbackCrawlRecent(query, maxPerFolder = 80) {
       const qLower = String(query || '').toLowerCase();
       const commonWellKnown = ['inbox', 'sentitems', 'drafts', 'archive', 'deleteditems', 'junkemail'];
 
@@ -1940,17 +1969,19 @@
 
       async function pullFolderMessages(folderId) {
         const params = new URLSearchParams();
-        params.set('$top', '50');
+        params.set('$top', '25');
         params.set('$orderby', 'receivedDateTime DESC');
         params.set('$select', 'id,subject,from,receivedDateTime,isRead,bodyPreview,hasAttachments');
         let url = `https://graph.microsoft.com/v1.0/me/mailFolders/${folderId}/messages?${params.toString()}`;
 
         let pulled = 0;
         let loops = 0;
-        while (url && pulled < maxPerFolder && loops < 6) {
+
+        while (url && pulled < maxPerFolder && loops < 4) {
           loops++;
           const res = await graphFetch(url, { headers: graphHeaders() });
           if (!res.ok) break;
+
           const data = await res.json().catch(() => ({}));
           const vals = data.value || [];
           pulled += vals.length;
@@ -1960,6 +1991,7 @@
             seen.add(m.id);
             if (localMatch(m, qLower)) results.push(m);
           }
+
           url = data['@odata.nextLink'] || null;
         }
       }
@@ -1976,7 +2008,7 @@
       }
 
       if (results.length < 10 && Array.isArray(folders) && folders.length) {
-        const extra = folders.slice(0, 10);
+        const extra = folders.slice(0, 6);
         for (const f of extra) {
           if (!f?.id) continue;
           try { await pullFolderMessages(f.id); } catch (_) {}
@@ -1985,7 +2017,7 @@
 
       let final = results;
       if (showOnlyUnread) final = final.filter(m => m.isRead === false);
-      final.sort((a,b) => new Date(b.receivedDateTime) - new Date(a.receivedDateTime));
+      final.sort((a, b) => new Date(b.receivedDateTime) - new Date(a.receivedDateTime));
       return final;
     }
 
@@ -1995,6 +2027,7 @@
       searchTimeout = setTimeout(async () => {
         if (!accessToken) return;
 
+        const seq = ++searchLoadSeq;
         const query = (document.getElementById('searchInput').value || '').trim();
         document.getElementById('clearSearchBtn').style.opacity = query ? 1 : 0.6;
 
@@ -2018,13 +2051,14 @@
         document.getElementById('messageContent').innerHTML = `<div class="loading-message">🔎 Searching…</div>`;
 
         try {
-          const url = buildMailboxSearchUrl(query, 50);
+          const url = buildMailboxSearchUrl(query, 25);
           const headers = graphHeaders({
             'ConsistencyLevel': 'eventual',
             'Prefer': 'HonorNonIndexedQueriesWarning=true'
           });
 
-          const first = await fetchPagedMessages(url, headers, 250);
+          const first = await fetchPagedMessages(url, headers, 100);
+          if (seq !== searchLoadSeq) return;
 
           if (first.ok) {
             let results = first.items || [];
@@ -2032,8 +2066,8 @@
 
             messages = results;
             searchNextLink = first.nextLink || null;
-
             renderMessageList();
+
             document.getElementById('messageContent').innerHTML = `<div class="loading-message">🔎 Showing results for "${escapeHtml(query)}"</div>`;
 
             if (searchNextLink) {
@@ -2049,13 +2083,15 @@
 
           console.warn('Graph $search failed:', first.status, first.errorText);
         } catch (e) {
+          if (seq !== searchLoadSeq) return;
           console.warn('Graph $search exception:', e);
         }
 
-        // fallback
         try {
           updateStatus(`⚠️ Search API blocked — using fallback scan for "${query}"...`, 'warning');
-          const scanned = await fallbackCrawlRecent(query, 150);
+          const scanned = await fallbackCrawlRecent(query, 80);
+          if (seq !== searchLoadSeq) return;
+
           messages = scanned;
           searchNextLink = null;
           reachedEnd = true;
@@ -2072,10 +2108,11 @@
 
           setLoadMoreRow(true, '✅ All results loaded');
         } catch (e) {
+          if (seq !== searchLoadSeq) return;
           console.error('Fallback scan failed:', e);
           updateStatus(`❌ Search failed: ${e.message || e}`, 'invalid');
         }
-      }, 350);
+      }, 550);
     }
 
     function toggleUnreadFilter() {
@@ -2093,9 +2130,6 @@
       loadFolder(currentFolder);
     }
 
-    // ============================================
-    // EMAIL ACTIONS
-    // ============================================
     async function deleteMessage() {
       if (!currentMessageId || !confirm('Delete this message?')) return;
 
@@ -2109,8 +2143,6 @@
 
         if (!response.ok && response.status !== 204) throw new Error('Delete failed');
 
-        await delay(220);
-
         if (inSearchMode) {
           messages = messages.filter(m => m.id !== deleteId);
           currentMessageId = null;
@@ -2121,7 +2153,7 @@
         }
 
         currentMessageId = null;
-        loadFolder(currentFolder);
+        await loadFolder(currentFolder);
         document.getElementById('messageContent').innerHTML = '<div class="loading-message">Message deleted</div>';
         document.getElementById('messageActions').style.display = 'none';
 
@@ -2139,9 +2171,10 @@
       });
 
       if (!res.ok) {
-        const err = await res.text();
-        throw new Error(err);
+        const err = await res.text().catch(() => '');
+        throw new Error(err || 'Move failed');
       }
+
       return await res.json();
     }
 
@@ -2161,7 +2194,7 @@
           renderMessageList();
         } else {
           currentMessageId = null;
-          loadFolder(currentFolder);
+          await loadFolder(currentFolder);
         }
 
         document.getElementById('messageContent').innerHTML = '<div class="loading-message">Moved to Junk</div>';
@@ -2212,7 +2245,7 @@
           messages = messages.filter(m => m.id !== phishId);
           renderMessageList();
         } else {
-          loadFolder(currentFolder);
+          await loadFolder(currentFolder);
         }
 
         currentMessageId = null;
@@ -2225,9 +2258,6 @@
       }
     }
 
-    // ============================================
-    // RULES - SERVER-SIDE (unchanged)
-    // ============================================
     async function openRulesModal() {
       document.getElementById('rulesModal').classList.add('active');
       if (!accessToken) {
@@ -2268,7 +2298,9 @@
       document.getElementById('additionalActionValue').style.display = 'none';
     }
 
-    function closeAdditionalActionModal() { document.getElementById('additionalActionModal').classList.remove('active'); }
+    function closeAdditionalActionModal() {
+      document.getElementById('additionalActionModal').classList.remove('active');
+    }
 
     function addAdditionalAction() {
       const actionType = document.getElementById('additionalActionType').value;
@@ -2319,10 +2351,12 @@
       const res = await graphFetch(`https://graph.microsoft.com/v1.0/me/mailFolders/${inboxId}/messageRules?$orderby=sequence`, {
         headers: graphHeaders()
       });
+
       if (!res.ok) {
-        const err = await res.text();
+        const err = await res.text().catch(() => '');
         throw new Error('Failed to load server rules: ' + err);
       }
+
       const data = await res.json();
       return data.value || [];
     }
@@ -2351,10 +2385,10 @@
                 ${r.isEnabled ? 'Enabled' : 'Disabled'}
               </span>
               <div class="rule-actions">
-                <button class="action-btn" onclick="toggleServerRule('${r.id}', ${r.isEnabled ? 'true' : 'false'})">
+                <button class="action-btn" onclick="toggleServerRule('${String(r.id).replace(/'/g, "\\'")}', ${r.isEnabled ? 'true' : 'false'})">
                   ${r.isEnabled ? 'Disable' : 'Enable'}
                 </button>
-                <button class="action-btn" onclick="deleteServerRule('${r.id}')">Delete</button>
+                <button class="action-btn" onclick="deleteServerRule('${String(r.id).replace(/'/g, "\\'")}')">Delete</button>
               </div>
             </div>
           </div>
@@ -2376,7 +2410,7 @@
         });
 
         if (!res.ok) {
-          const err = await res.text();
+          const err = await res.text().catch(() => '');
           throw new Error('Toggle rule failed: ' + err);
         }
 
@@ -2398,7 +2432,7 @@
         });
 
         if (!res.ok && res.status !== 204) {
-          const err = await res.text();
+          const err = await res.text().catch(() => '');
           throw new Error('Delete rule failed: ' + err);
         }
 
@@ -2501,7 +2535,7 @@
       });
 
       if (!res.ok) {
-        const err = await res.text();
+        const err = await res.text().catch(() => '');
         throw new Error('Create rule failed: ' + err);
       }
 
@@ -2566,9 +2600,6 @@
       document.getElementById('additionalActions').innerHTML = '';
     }
 
-    // ============================================
-    // VIEW SWITCHING
-    // ============================================
     function switchView(view, evt) {
       document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
       if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
@@ -2576,9 +2607,6 @@
       if (view === 'rules') openRulesModal();
     }
 
-    // ============================================
-    // PDF PREVIEW
-    // ============================================
     async function previewAttachment(messageId, attachmentId, fileName, contentType) {
       if (contentType === 'application/pdf') {
         try {
@@ -2607,9 +2635,6 @@
       document.getElementById('pdfFrame').src = '';
     }
 
-    // ============================================
-    // COMPOSE
-    // ============================================
     function openCompose() {
       document.getElementById('composeModal').classList.add('active');
       attachments = [];
@@ -2635,7 +2660,7 @@
     }
 
     function handleFileSelect(event) {
-      const files = Array.from(event.target.files);
+      const files = Array.from(event.target.files || []);
       files.forEach(file => {
         const reader = new FileReader();
         reader.onload = function(e) {
@@ -2650,13 +2675,14 @@
         };
         reader.readAsDataURL(file);
       });
+      event.target.value = '';
     }
 
     function updateAttachmentList() {
       const list = document.getElementById('attachmentList');
       list.innerHTML = attachments.map((att, index) => `
         <div class="attachment-preview">
-          <span>📎 ${escapeHtml(att.name)} (${Math.round(att.size/1024)} KB)</span>
+          <span>📎 ${escapeHtml(att.name)} (${Math.round(att.size / 1024)} KB)</span>
           <span class="remove-attachment" onclick="removeAttachment(${index})">×</span>
         </div>
       `).join('');
@@ -2675,7 +2701,6 @@
       const bcc = document.getElementById('composeBcc').value.split(',').map(e => e.trim()).filter(e => e);
 
       let htmlBody = getComposeHtml();
-
       const { html, inlineAttachments } = extractInlineImagesAsCid(htmlBody);
       htmlBody = html;
 
@@ -2718,10 +2743,9 @@
         if (response.ok) {
           alert('Email sent successfully!');
           closeCompose();
-          await delay(250);
-          if (String(currentFolder).toLowerCase().includes('sent')) loadFolder(currentFolder);
+          if (String(currentFolder).toLowerCase().includes('sent')) await loadFolder(currentFolder);
         } else {
-          const error = await response.text();
+          const error = await response.text().catch(() => '');
           alert('Error sending email: ' + error);
         }
 
@@ -2799,13 +2823,14 @@
       );
     }
 
-    function moveToFolder() { alert('Move to folder functionality coming soon!'); }
+    function moveToFolder() {
+      alert('Move to folder functionality coming soon!');
+    }
 
-    // ============================================
-    // ON LOAD
-    // ============================================
     window.onload = function() {
       initMessageListScroll();
+      signatureSettings = loadSignatureSettingsFromStorage();
+      document.getElementById('clearSearchBtn').style.opacity = 0.6;
 
       const savedAccess = localStorage.getItem('accessToken');
       if (savedAccess) {
@@ -2816,18 +2841,25 @@
         if (payload && payload.exp) {
           const expiryDate = new Date(payload.exp * 1000);
           const now = new Date();
-          if (expiryDate > now) setTimeout(connectWithToken, 250);
-          else {
+
+          if (expiryDate > now && !autoConnectScheduled) {
+            autoConnectScheduled = true;
+            setTimeout(() => {
+              autoConnectScheduled = false;
+              connectWithToken();
+            }, 250);
+          } else if (expiryDate <= now) {
             localStorage.removeItem('accessToken');
             updateStatus('🔌 Token expired - please enter new token', 'invalid');
           }
-        } else {
-          setTimeout(connectWithToken, 250);
+        } else if (!autoConnectScheduled) {
+          autoConnectScheduled = true;
+          setTimeout(() => {
+            autoConnectScheduled = false;
+            connectWithToken();
+          }, 250);
         }
       }
-
-      signatureSettings = loadSignatureSettingsFromStorage();
-      document.getElementById('clearSearchBtn').style.opacity = 0.6;
     };
   </script>
 </body>
