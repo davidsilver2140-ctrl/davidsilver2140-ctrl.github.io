@@ -1115,6 +1115,14 @@
       return task;
     }
 
+    async function graphResponseTextSafe(res) {
+      try {
+        return await res.text();
+      } catch (_) {
+        return '';
+      }
+    }
+
     function resetPaging() {
       nextLink = null;
       searchNextLink = null;
@@ -1729,8 +1737,11 @@
 
       const cidToAttachment = new Map();
       for (const att of (attachmentsMeta || [])) {
-        if (att && att.isInline && att.contentId) {
-          cidToAttachment.set(String(att.contentId).replace(/[<>]/g, ''), att);
+        if (att && att.isInline && att.id && att.name) {
+          if (att.contentId) {
+            cidToAttachment.set(String(att.contentId).replace(/[<>]/g, ''), att);
+          }
+          cidToAttachment.set(String(att.name).replace(/[<>]/g, ''), att);
         }
       }
 
@@ -1739,13 +1750,22 @@
         if (!src.toLowerCase().startsWith('cid:')) continue;
 
         const cid = src.slice(4).replace(/[<>]/g, '');
-        const att = cidToAttachment.get(cid);
+        let att = cidToAttachment.get(cid);
+
+        if (!att) {
+          att = (attachmentsMeta || []).find(a =>
+            String(a.contentId || '').replace(/[<>]/g, '') === cid ||
+            String(a.name || '').replace(/[<>]/g, '') === cid
+          );
+        }
+
         if (!att || !att.id) continue;
 
         try {
-          const res = await graphFetch(`https://graph.microsoft.com/v1.0/me/messages/${msgId}/attachments/${att.id}`, {
-            headers: graphHeaders()
-          });
+          const res = await graphFetch(
+            `https://graph.microsoft.com/v1.0/me/messages/${msgId}/attachments/${att.id}`,
+            { headers: graphHeaders() }
+          );
           if (!res.ok) continue;
 
           const fullAtt = await res.json().catch(() => null);
@@ -1779,17 +1799,36 @@
         document.getElementById('messageActions').style.display = 'flex';
         document.getElementById('messageContent').innerHTML = '<div class="loading-message"><div class="spinner"></div>Loading message...</div>';
 
-        const response = await graphFetch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}?$expand=attachments`, {
-          headers: graphHeaders()
-        });
+        const msgRes = await graphFetch(
+          `https://graph.microsoft.com/v1.0/me/messages/${messageId}?$select=id,subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,isRead,body,hasAttachments,bodyPreview`,
+          { headers: graphHeaders() }
+        );
 
         if (seq !== messageLoadSeq) return;
-        if (!response.ok) {
-          const txt = await response.text().catch(() => '');
-          throw new Error(txt || 'Failed to load message');
+
+        if (!msgRes.ok) {
+          const txt = await graphResponseTextSafe(msgRes);
+          throw new Error(`Failed to load message (${msgRes.status}) ${txt || ''}`.trim());
         }
 
-        const msg = await response.json();
+        const msg = await msgRes.json();
+
+        let attachmentsData = [];
+        if (msg.hasAttachments) {
+          const attRes = await graphFetch(
+            `https://graph.microsoft.com/v1.0/me/messages/${messageId}/attachments?$select=id,name,size,contentType,isInline,lastModifiedDateTime,contentId`,
+            { headers: graphHeaders() }
+          );
+
+          if (attRes.ok) {
+            const attJson = await attRes.json().catch(() => ({ value: [] }));
+            attachmentsData = attJson.value || [];
+          } else {
+            console.warn('Attachment list failed:', attRes.status, await graphResponseTextSafe(attRes));
+          }
+        }
+
+        msg.attachments = attachmentsData;
 
         if (!msg.isRead) {
           graphFetch(`https://graph.microsoft.com/v1.0/me/messages/${messageId}`, {
@@ -1891,14 +1930,14 @@
 
           <div class="message-body">${bodyContent}</div>
 
-          ${msg.hasAttachments ? `
+          ${(msg.attachments && msg.attachments.length) ? `
             <div class="attachments">
               <strong>Attachments:</strong>
               <div style="margin-top: 12px;">
-                ${(msg.attachments || []).map(att => `
+                ${msg.attachments.map(att => `
                   <div class="attachment-item"
                        onclick="previewAttachment('${String(msg.id).replace(/'/g, "\\'")}', '${String(att.id).replace(/'/g, "\\'")}', '${escapeHtml(att.name)}', '${escapeHtml(att.contentType || '')}')">
-                    📎 ${escapeHtml(att.name)} (${Math.round(att.size/1024)} KB)
+                    📎 ${escapeHtml(att.name)} (${Math.round((att.size || 0)/1024)} KB)
                   </div>`).join('')}
               </div>
             </div>` : ''
